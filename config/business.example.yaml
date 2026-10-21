@@ -68,25 +68,19 @@ vintage:
 # 4. Chia mẫu  [p.34-37]
 # ---------------------------------------------------------------------
 split:
-  method: time                             # time | random   (OOT cần cột ngày)
-  development_pct: 0.75                    # [p.34] dev 70-80%
-  validation_pct: 0.25                     # [p.34] validation 20-30%
+  method: time                             # time | random  -- chỉ chia TRAIN/TEST, KHÔNG dùng K-fold/bootstrap
+  train_pct: 0.75                          # [p.34] dev 70-80%
+  test_pct: 0.25                           # [p.34] test 20-30%
   oot:
-    enabled: true                          # [ĐỀ XUẤT] tập ngoài thời gian
-    months: 3                              # [CẦN CHỐT]
+    enabled: false                         # tuỳ chọn, mặc định tắt (bạn chỉ dùng train/test)
+    months: 3
   min_goods: 2000                          # [p.34]
   min_bads: 2000                           # [p.34]  (VN: bad rate 10-20% đôi khi chấp nhận)
-  cross_validation:
-    enabled: true                          # [p.35] tổng hợp mọi fold, không chọn fold đẹp nhất
-    folds: 5
-  bootstrap:
-    enabled: true                          # [p.36]
-    n_draws: 200                           # [ĐỀ XUẤT]
-  max_dev_val_gap_gini_pp: 5               # [ĐỀ XUẤT][CẦN CHỐT] chênh lệch lớn = overfit [p.34]
+  max_train_test_gap_gini_pp: 5               # [ĐỀ XUẤT][CẦN CHỐT] chênh lệch lớn = overfit [p.34]
   imbalance:                               # [p.37] QUYẾT ĐỊNH CỦA BẠN - không có mặc định
     method: null                           # [CẦN CHỐT] null = app BẮT BUỘC bạn chọn trước khi huấn luyện
     allowed_methods: [none, oversample_random, oversample_smote, undersample_random, sample_weight]
-    apply_to: train_only                   # chỉ áp dụng cho tập train; validation/OOT giữ nguyên phân bố thật
+    apply_to: train_only                   # chỉ áp dụng cho tập train; tập Test giữ nguyên phân bố thật
     target_bad_rate: null                  # [CẦN CHỐT] [p.37] gợi ý 30-50% nếu oversample
     prior_correction: null                 # [CẦN CHỐT] [p.37] hiệu chỉnh PD về bad rate thật: offset = ln(bad_dev / bad_true)
     show_comparison: true                  # UI cho so sánh các phương án cạnh nhau để bạn quyết
@@ -196,9 +190,8 @@ modeling:
       enabled: true                        # [p.51]
       params: {n_estimators: 300, learning_rate: 0.05, num_leaves: 15, min_child_samples: 100}
     shap: true                             # [p.51] giải thích đóng góp biến cho mô hình ML
-    calibrate_probabilities: isotonic      # none | platt | isotonic - ML cần hiệu chỉnh trước khi so PD
     max_gini_gap_vs_primary_pp: 5          # [ĐỀ XUẤT][CẦN CHỐT] ML hơn logistic quá ngưỡng -> cảnh báo bỏ sót phi tuyến/tương tác
-    compare_on: [validation, oot]
+    compare_on: [test]
   reject_inference:
     enabled: false                         # [p.28-31] AGB; tùy chọn  [CẦN CHỐT]
     method: augmentation
@@ -230,13 +223,9 @@ evaluation:
   csi:
     green_below: 0.10                      # [ĐỀ XUẤT][CẦN CHỐT]
     red_above: 0.25
-  calibration:
-    max_abs_pd_error_pct: 20               # [ĐỀ XUẤT][CẦN CHỐT] PD dự báo vs thực tế theo tranche
-    max_brier: null                        # [CẦN CHỐT]
-    max_ece: 0.05                          # [ĐỀ XUẤT][CẦN CHỐT] expected calibration error
   # --- Chỉ số kiểu ML (bổ sung ngoài các chỉ số tín dụng ở trên) ---
   ml_metrics:                              # [ĐỀ XUẤT] chấm cùng bộ cho logistic, DT, RF, LightGBM
-    report: [roc_auc, pr_auc, log_loss, brier, precision, recall, f1, specificity, balanced_accuracy, mcc, lift_at_decile, confusion_matrix]
+    report: [roc_auc, pr_auc, precision, recall, f1, specificity, balanced_accuracy, mcc, lift_at_decile, confusion_matrix]
     decision_threshold:
       mode: by_cutoff                      # by_cutoff (theo cutoff điểm) | max_f1 | fixed
       fixed_value: 0.5                     # chỉ dùng khi mode=fixed
@@ -244,15 +233,10 @@ evaluation:
       min_pr_auc_lift_over_base_rate: 2.0  # PR-AUC >= 2 x bad rate nền
       min_recall_at_cutoff: null
       min_precision_at_cutoff: null
-      max_log_loss: null
     lift:
       top_decile_min: 2.5                  # [ĐỀ XUẤT][CẦN CHỐT] lift decile rủi ro cao nhất
-    stability:                             # đánh giá độ ổn định như ML
-      cv_folds: 5                          # [p.35]
-      max_std_auc_across_folds: 0.02       # [ĐỀ XUẤT][CẦN CHỐT]
-      bootstrap_ci: 0.95                   # [p.36] khoảng tin cậy AUC/KS/Gini
     overfit:
-      max_auc_gap_train_val: 0.05          # [ĐỀ XUẤT][CẦN CHỐT] [p.34]
+      max_auc_gap_train_test: 0.05          # [ĐỀ XUẤT][CẦN CHỐT] [p.34]
       learning_curve: true
     compare_models:
       rank_by: [gini, pr_auc, ks]
