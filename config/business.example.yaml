@@ -83,10 +83,13 @@ split:
     enabled: true                          # [p.36]
     n_draws: 200                           # [ĐỀ XUẤT]
   max_dev_val_gap_gini_pp: 5               # [ĐỀ XUẤT][CẦN CHỐT] chênh lệch lớn = overfit [p.34]
-  imbalance:
-    method: none                           # none | oversample | sample_weight  [p.37]
-    target_bad_rate: [0.30, 0.50]          # [p.37] nếu oversample
-    prior_correction: true                 # [p.37] offset = ln(bad_dev / bad_true)
+  imbalance:                               # [p.37] QUYẾT ĐỊNH CỦA BẠN - không có mặc định
+    method: null                           # [CẦN CHỐT] null = app BẮT BUỘC bạn chọn trước khi huấn luyện
+    allowed_methods: [none, oversample_random, oversample_smote, undersample_random, sample_weight]
+    apply_to: train_only                   # chỉ áp dụng cho tập train; validation/OOT giữ nguyên phân bố thật
+    target_bad_rate: null                  # [CẦN CHỐT] [p.37] gợi ý 30-50% nếu oversample
+    prior_correction: null                 # [CẦN CHỐT] [p.37] hiệu chỉnh PD về bad rate thật: offset = ln(bad_dev / bad_true)
+    show_comparison: true                  # UI cho so sánh các phương án cạnh nhau để bạn quyết
 
 # ---------------------------------------------------------------------
 # 5. Phân tầng (segmentation)  -- để dữ liệu gợi ý, bạn duyệt rồi mới chốt
@@ -182,15 +185,20 @@ modeling:
     min_variables: 10                      # [p.41] (cảnh báo, không bắt buộc)
     require_expected_sign: true            # [p.41] dấu hệ số phải khớp xu hướng bad rate
     expected_sign_on_woe: negative         # [ĐỀ XUẤT] WoE=ln(G/B) -> hệ số logit(bad) < 0
-  challenger:
+  challengers:                             # [p.51] chỉ đối chứng, không thay mô hình chính
+    decision_tree:
+      enabled: true
+      params: {max_depth: 4, min_samples_leaf: 200, class_weight: null}   # [ĐỀ XUẤT] cây nông, dễ diễn giải
+    random_forest:
+      enabled: true                        # [p.51] ensemble giảm phương sai; không có xác suất hiệu chỉnh sẵn
+      params: {n_estimators: 300, max_depth: 8, min_samples_leaf: 100, n_jobs: -1}
     lightgbm:
-      enabled: true                        # [p.51] chỉ đối chứng, không thay mô hình chính
-      shap: true
-      params:
-        n_estimators: 300
-        learning_rate: 0.05
-        num_leaves: 15
-        min_child_samples: 100
+      enabled: true                        # [p.51]
+      params: {n_estimators: 300, learning_rate: 0.05, num_leaves: 15, min_child_samples: 100}
+    shap: true                             # [p.51] giải thích đóng góp biến cho mô hình ML
+    calibrate_probabilities: isotonic      # none | platt | isotonic - ML cần hiệu chỉnh trước khi so PD
+    max_gini_gap_vs_primary_pp: 5          # [ĐỀ XUẤT][CẦN CHỐT] ML hơn logistic quá ngưỡng -> cảnh báo bỏ sót phi tuyến/tương tác
+    compare_on: [validation, oot]
   reject_inference:
     enabled: false                         # [p.28-31] AGB; tùy chọn  [CẦN CHỐT]
     method: augmentation
@@ -224,6 +232,33 @@ evaluation:
     red_above: 0.25
   calibration:
     max_abs_pd_error_pct: 20               # [ĐỀ XUẤT][CẦN CHỐT] PD dự báo vs thực tế theo tranche
+    max_brier: null                        # [CẦN CHỐT]
+    max_ece: 0.05                          # [ĐỀ XUẤT][CẦN CHỐT] expected calibration error
+  # --- Chỉ số kiểu ML (bổ sung ngoài các chỉ số tín dụng ở trên) ---
+  ml_metrics:                              # [ĐỀ XUẤT] chấm cùng bộ cho logistic, DT, RF, LightGBM
+    report: [roc_auc, pr_auc, log_loss, brier, precision, recall, f1, specificity, balanced_accuracy, mcc, lift_at_decile, confusion_matrix]
+    decision_threshold:
+      mode: by_cutoff                      # by_cutoff (theo cutoff điểm) | max_f1 | fixed
+      fixed_value: 0.5                     # chỉ dùng khi mode=fixed
+    thresholds:                            # [ĐỀ XUẤT][CẦN CHỐT] mức tối thiểu để "đạt"
+      min_pr_auc_lift_over_base_rate: 2.0  # PR-AUC >= 2 x bad rate nền
+      min_recall_at_cutoff: null
+      min_precision_at_cutoff: null
+      max_log_loss: null
+    lift:
+      top_decile_min: 2.5                  # [ĐỀ XUẤT][CẦN CHỐT] lift decile rủi ro cao nhất
+    stability:                             # đánh giá độ ổn định như ML
+      cv_folds: 5                          # [p.35]
+      max_std_auc_across_folds: 0.02       # [ĐỀ XUẤT][CẦN CHỐT]
+      bootstrap_ci: 0.95                   # [p.36] khoảng tin cậy AUC/KS/Gini
+    overfit:
+      max_auc_gap_train_val: 0.05          # [ĐỀ XUẤT][CẦN CHỐT] [p.34]
+      learning_curve: true
+    compare_models:
+      rank_by: [gini, pr_auc, ks]
+      require_primary_not_worse_than_challenger_pp: 5   # [ĐỀ XUẤT][CẦN CHỐT]
+      permutation_importance: true
+      partial_dependence: true
 
 # ---------------------------------------------------------------------
 # 11. Quy đổi điểm  [p.18: ví dụ 600 điểm = odds 50:1]
