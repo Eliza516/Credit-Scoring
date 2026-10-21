@@ -1,0 +1,15 @@
+streamlit>=1.40,<2
+pandas>=2.2,<4
+numpy>=1.26,<3
+scipy>=1.11
+scikit-learn>=1.4,<2
+optbinning>=0.19,<2
+ortools>=9.9
+lightgbm>=4.3,<5
+statsmodels>=0.14
+imbalanced-learn>=0.12
+shap>=0.45
+plotly>=5.20
+openpyxl>=3.1
+reportlab>=4.0
+pyyaml>=6
