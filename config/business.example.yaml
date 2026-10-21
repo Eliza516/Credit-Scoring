@@ -1,0 +1,257 @@
+# =====================================================================
+# MẪU CẤU HÌNH QUY TẮC NGHIỆP VỤ  (được commit)
+# Bản thật: sao chép thành config/business.yaml (KHÔNG commit).
+#
+# Chú thích:
+#   [p.N]    = lấy từ slide DATANITY FRM Section 5A, trang N (PDF trong repo)
+#   [CẦN CHỐT] = slide không nêu / phụ thuộc sản phẩm -> BẠN quyết định
+#   [ĐỀ XUẤT]  = giá trị đề xuất của Claude, không có trong slide
+# Mọi ngưỡng bên dưới chỉ KÍCH HOẠT GỢI Ý trên UI; không tự áp dụng.
+# =====================================================================
+version: 1
+seed: 42                                   # tái lập kết quả
+
+# ---------------------------------------------------------------------
+# 1. Ánh xạ cột (điền khi upload; để null nếu chưa biết)
+# ---------------------------------------------------------------------
+columns:
+  id: null
+  open_date: null                          # ngày mở hợp đồng / ngày chấm điểm T0
+  target: null                             # nếu đã có sẵn cờ bad
+  dpd_max: null                            # DPD tối đa trong performance window
+  charge_off_flag: null
+  write_off_flag: null
+  bankruptcy_flag: null
+  months_on_book: null
+
+# ---------------------------------------------------------------------
+# 2. Định nghĩa target  [p.20, p.29]  -- quyết định quan trọng nhất
+# ---------------------------------------------------------------------
+target:
+  observation_window_months: 36            # [p.20] cửa sổ quan sát phía trước T0
+  performance_window_months: 12            # [p.20] 12-24 tháng; CHỐT bằng vintage (mục 3)
+  performance_window_range: [12, 24]       # [p.20]
+  bad:
+    dpd_threshold: 91                      # [p.20] từng quá hạn 91+ ngày (nhóm nợ 3-5)
+    include_charge_off: true               # [p.20]
+    include_write_off: true                # [p.20]
+    include_bankruptcy: true               # [p.20]
+  good:
+    description: "Luôn nhóm nợ 1, không charge-off/write-off trong performance window"  # [p.20]
+    max_dpd: 0                             # [ĐỀ XUẤT] "sạch" = chưa từng quá hạn  [CẦN CHỐT]
+  indeterminate:                           # [p.20] loại khỏi mẫu phát triển
+    dpd_range: [10, 90]                    # từng nhóm 2 nhưng không bao giờ 91+
+  exclusion:                               # [p.20] loại khỏi mẫu phát triển
+    min_payments: 6                        # < 6 kỳ thanh toán -> chưa đủ performance
+    deceased: true
+    fraud: true
+    staff_vip: true
+    policy_accounts: true                  # tài khoản đặc biệt theo chính sách
+  exclude_indeterminate_from_development: true   # [p.20]
+
+# ---------------------------------------------------------------------
+# 3. Vintage analysis  [p.20: performance window xác định bằng vintage]
+# ---------------------------------------------------------------------
+vintage:
+  cohort_granularity: month                # cohort theo tháng mở hợp đồng
+  max_mob: 24                              # [ĐỀ XUẤT] khớp performance_window_range
+  maturity:
+    # MOB mà bad rate cohort "chín" = mức tăng bad rate tích lũy giữa 2 MOB liên tiếp
+    # nhỏ hơn ngưỡng trong N MOB liên tiếp -> gợi ý performance window
+    delta_threshold_pp: 0.2                # [ĐỀ XUẤT][CẦN CHỐT] điểm phần trăm
+    consecutive_mob: 3                     # [ĐỀ XUẤT][CẦN CHỐT]
+  cohort_anomaly:
+    zscore_threshold: 2.0                  # [ĐỀ XUẤT] cờ cohort bad rate lệch bất thường
+    min_cohort_size: 200                   # [ĐỀ XUẤT][CẦN CHỐT]
+
+# ---------------------------------------------------------------------
+# 4. Chia mẫu  [p.34-37]
+# ---------------------------------------------------------------------
+split:
+  method: time                             # time | random   (OOT cần cột ngày)
+  development_pct: 0.75                    # [p.34] dev 70-80%
+  validation_pct: 0.25                     # [p.34] validation 20-30%
+  oot:
+    enabled: true                          # [ĐỀ XUẤT] tập ngoài thời gian
+    months: 3                              # [CẦN CHỐT]
+  min_goods: 2000                          # [p.34]
+  min_bads: 2000                           # [p.34]  (VN: bad rate 10-20% đôi khi chấp nhận)
+  cross_validation:
+    enabled: true                          # [p.35] tổng hợp mọi fold, không chọn fold đẹp nhất
+    folds: 5
+  bootstrap:
+    enabled: true                          # [p.36]
+    n_draws: 200                           # [ĐỀ XUẤT]
+  max_dev_val_gap_gini_pp: 5               # [ĐỀ XUẤT][CẦN CHỐT] chênh lệch lớn = overfit [p.34]
+  imbalance:
+    method: none                           # none | oversample | sample_weight  [p.37]
+    target_bad_rate: [0.30, 0.50]          # [p.37] nếu oversample
+    prior_correction: true                 # [p.37] offset = ln(bad_dev / bad_true)
+
+# ---------------------------------------------------------------------
+# 5. Phân tầng (segmentation)  -- để dữ liệu gợi ý, bạn duyệt rồi mới chốt
+# ---------------------------------------------------------------------
+segmentation:
+  mode: suggest                            # suggest | none | manual
+  candidate_features: []                   # [CẦN CHỐT] vd: product_type, channel, thin_file_flag
+  min_segment_size_pct: 0.10               # [ĐỀ XUẤT][CẦN CHỐT]
+  min_bads_per_segment: 500                # [ĐỀ XUẤT] đủ ổn định (cf. min_bads)
+  min_bad_rate_ratio: 1.5                  # [ĐỀ XUẤT] tầng khác biệt nếu bad rate lệch >= 1.5 lần
+  max_segments: 4                          # [ĐỀ XUẤT]
+  tree_max_depth: 2                        # [ĐỀ XUẤT] cây nông để gợi ý
+  suggest_if_gini_gain_pp: 3               # [ĐỀ XUẤT] chỉ gợi ý nếu Gini tổng tăng >= 3 điểm
+
+# ---------------------------------------------------------------------
+# 6. Làm sạch dữ liệu  [p.32]
+# ---------------------------------------------------------------------
+cleaning:
+  max_missing_pct: 0.30                    # [p.41] loại biến missing > 30% (không mang tính cấu trúc)
+  drop_constant: true                      # [p.41]
+  drop_unavailable_at_t0: true             # [p.41] biến không có tại thời điểm chấm điểm
+  missing:
+    strategy: own_bin                      # [p.32] own_bin | impute | drop_records; null != 0
+    impute_numeric: median                 # chỉ dùng khi strategy=impute và missing ngẫu nhiên
+    impute_categorical: mode
+    drop_records_if_missing_pct_below: 0.05   # [p.32] "few random records (<5%)"
+  outliers:
+    strategy: coarse_binning               # [p.32] coarse_binning | cap_floor | none
+    cap_floor_percentiles: [1, 99]         # [p.32] P1/P99
+  special_values: []                       # [CẦN CHỐT] vd [-999, 9999, "N/A"] -> bin riêng
+  impossible_value_rules: {}               # [p.32] vd: {age: [18, 100]}  [CẦN CHỐT]
+
+# ---------------------------------------------------------------------
+# 7. Binning  [p.33, p.43]
+# ---------------------------------------------------------------------
+binning:
+  initial_fine_bins: 10                    # [p.33] ~9-10 fine bin rồi gộp
+  max_coarse_bins: 6                       # [ĐỀ XUẤT][CẦN CHỐT]
+  min_coarse_bins: 2
+  min_bin_pct: 0.05                        # [p.33] mỗi bin >= 5% mẫu
+  min_bin_bads: 30                         # [ĐỀ XUẤT]
+  monotonic_trend: auto                    # auto | ascending | descending | none   [p.33]
+  allow_non_monotonic_vars: []             # biến phi tuyến có lý do nghiệp vụ (vd tuổi) [CẦN CHỐT]
+  missing_as_own_bin: true                 # [p.33]
+  special_bin: true
+  woe_formula: "ln(%Good / %Bad)"          # [p.43]; WoE>0 = rủi ro thấp hơn
+
+# ---------------------------------------------------------------------
+# 8. Chọn biến (phễu)  [p.41]
+# ---------------------------------------------------------------------
+selection:
+  iv:
+    useless_below: 0.02                    # [p.43] < 0.02 loại
+    weak_below: 0.10                       # [p.43] 0.02-0.10 yếu
+    medium_below: 0.30                     # [p.43] 0.10-0.30 trung bình
+    strong_below: 0.50                     # [p.43] 0.30-0.50 mạnh
+    suspicious_above: 0.50                 # [p.43] > 0.5 nghi ngờ over-predict -> kiểm tra rò rỉ
+  correlation:
+    raw_abs_threshold: 0.80                # [p.41] tương quan thô
+    binned_abs_threshold: 0.60             # [p.41] sau binning
+    keep_higher: iv                        # giữ biến có IV cao hơn
+  vif:
+    threshold: 5                           # [p.41]
+  stability:
+    check_bad_rate_trend_reversal: true    # [p.41] xu hướng bad rate đảo chiều dev vs val
+    max_iv_drop_pct: 0.30                  # [ĐỀ XUẤT][CẦN CHỐT] IV tụt mạnh
+  final_variable_count: [10, 20]           # [p.41] thực hành ngành 10-20 biến
+  must_keep: []                            # [CẦN CHỐT]
+  must_drop: []                            # [CẦN CHỐT]
+  compliance:                              # [p.24-25] checklist "Safe to model?"
+    protected_attributes: [gender, religion, marital_status, nationality]   # [p.24] loại bỏ
+    proxy_warning_features: [zip, postal_code, device_id, device_type, gps_lat, gps_lon, social_network]  # [p.24-25]
+    require_consent_flag_for_alt_data: true
+    min_history_years: 5                   # [p.25] ổn định >= 5 năm
+    require_explainable: true              # [p.25]
+
+# ---------------------------------------------------------------------
+# 9. Mô hình hóa  [p.41, p.46, p.51]
+# ---------------------------------------------------------------------
+modeling:
+  primary: logistic_woe                    # [p.46] chính: logistic trên WoE
+  logistic:
+    penalty: none                          # none | l2   [CẦN CHỐT]
+    C: 1.0
+    max_iter: 1000
+  stepwise:
+    enabled: true                          # [p.41] "Model Fit" - loại p-value > 0.05
+    direction: both                        # forward | backward | both
+    criterion: pvalue                      # pvalue | aic | bic
+    p_enter: 0.05                          # [p.41]
+    p_remove: 0.05                         # [p.41]
+    max_variables: 20                      # [p.41]
+    min_variables: 10                      # [p.41] (cảnh báo, không bắt buộc)
+    require_expected_sign: true            # [p.41] dấu hệ số phải khớp xu hướng bad rate
+    expected_sign_on_woe: negative         # [ĐỀ XUẤT] WoE=ln(G/B) -> hệ số logit(bad) < 0
+  challenger:
+    lightgbm:
+      enabled: true                        # [p.51] chỉ đối chứng, không thay mô hình chính
+      shap: true
+      params:
+        n_estimators: 300
+        learning_rate: 0.05
+        num_leaves: 15
+        min_child_samples: 100
+  reject_inference:
+    enabled: false                         # [p.28-31] AGB; tùy chọn  [CẦN CHỐT]
+    method: augmentation
+
+# ---------------------------------------------------------------------
+# 10. Đánh giá  [p.47-50]
+# ---------------------------------------------------------------------
+evaluation:
+  ks:                                      # [p.47] application thường 40-60
+    weak_below: 20
+    acceptable_min: 30
+    strong_above: 40
+  gini:                                    # [p.47] (đơn vị %)
+    weak_below: 35
+    acceptable_min: 35
+    good_min: 45
+    excellent_above: 60
+  auc:                                     # [p.47]
+    weak_below: 0.675
+    acceptable_min: 0.675
+    good_min: 0.725
+    excellent_above: 0.80
+  rank_ordering:
+    n_tranches: 10                         # [p.50] ~10 tranche A-J
+    require_monotonic_bad_rate: true       # [p.19, p.50]
+  psi:                                     # slide nhắc PSI/CSI nhưng KHÔNG nêu ngưỡng
+    green_below: 0.10                      # [ĐỀ XUẤT][CẦN CHỐT] chuẩn ngành
+    red_above: 0.25                        # [ĐỀ XUẤT][CẦN CHỐT]
+  csi:
+    green_below: 0.10                      # [ĐỀ XUẤT][CẦN CHỐT]
+    red_above: 0.25
+  calibration:
+    max_abs_pd_error_pct: 20               # [ĐỀ XUẤT][CẦN CHỐT] PD dự báo vs thực tế theo tranche
+
+# ---------------------------------------------------------------------
+# 11. Quy đổi điểm  [p.18: ví dụ 600 điểm = odds 50:1]
+# ---------------------------------------------------------------------
+scorecard:
+  base_score: 600                          # [p.18 ví dụ][CẦN CHỐT]
+  base_odds_good_to_bad: 50                # [p.18 ví dụ][CẦN CHỐT]
+  pdo: 20                                  # [ĐỀ XUẤT][CẦN CHỐT] điểm để odds tăng gấp đôi
+  score_range: [300, 850]                  # [ĐỀ XUẤT][CẦN CHỐT]
+  rounding: 0
+  higher_score_means: lower_risk           # [p.18]
+
+# ---------------------------------------------------------------------
+# 12. Cutoff & vùng rủi ro  [p.15, p.50] -- quyết định CHÍNH SÁCH, tách khỏi mô hình
+# ---------------------------------------------------------------------
+cutoff:
+  zones: [approve, manual_review, reject]  # [p.6, p.15]
+  strategy: target_bad_rate                # target_approval_rate | target_bad_rate | profit   [CẦN CHỐT]
+  target_approval_rate: null               # [CẦN CHỐT]
+  target_bad_rate: null                    # [CẦN CHỐT]
+  manual_review_band_width_pct: 10         # [ĐỀ XUẤT][CẦN CHỐT] % dân số ở vùng xét tay
+  risk_tranches: 10                        # [p.50] A (rủi ro cao) ... J (thấp)
+
+# ---------------------------------------------------------------------
+# 13. Chế độ public (Streamlit Cloud free tier ~1GB RAM)
+# ---------------------------------------------------------------------
+public_mode:
+  max_upload_mb: 20                        # [ĐỀ XUẤT]
+  max_rows: 100000                         # [ĐỀ XUẤT]
+  max_columns: 200                         # [ĐỀ XUẤT]
+  show_privacy_banner: true

@@ -1,0 +1,20 @@
+# Dữ liệu, kết quả, cấu hình nghiệp vụ thật, bí mật — KHÔNG commit
+data/
+artifacts/
+config/business.yaml
+.env
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+*.egg-info/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
