@@ -16,13 +16,19 @@ seed: 42                                   # tái lập kết quả
 # ---------------------------------------------------------------------
 columns:
   id: null
-  open_date: null                          # ngày mở hợp đồng / ngày chấm điểm T0
-  target: null                             # nếu đã có sẵn cờ bad
+  open_date: null                          # ngày mở hợp đồng / ngày chấm điểm T0 (cần cho vintage & chia theo thời gian)
+  target: null                             # nếu đã có sẵn cờ bad (1=bad, 0=good, rỗng=loại)
   dpd_max: null                            # DPD tối đa trong performance window
+  first_bad_mob: null                      # MOB lần đầu chạm ngưỡng bad (rỗng nếu chưa bad) - cần cho vintage
+  months_observed: null                    # số tháng đã quan sát (MOB hiện tại) - cần cho vintage/độ chín
+  n_payments: null                         # số kỳ thanh toán đã qua
   charge_off_flag: null
   write_off_flag: null
   bankruptcy_flag: null
-  months_on_book: null
+  fraud_flag: null
+  deceased_flag: null
+  staff_vip_flag: null
+  policy_flag: null
 
 # ---------------------------------------------------------------------
 # 2. Định nghĩa target  [p.20, p.29]  -- quyết định quan trọng nhất
@@ -264,6 +270,8 @@ cutoff:
   target_approval_rate: null               # [CẦN CHỐT]
   target_bad_rate: null                    # [CẦN CHỐT]
   manual_review_band_width_pct: 10         # [ĐỀ XUẤT][CẦN CHỐT] % dân số ở vùng xét tay
+  profit_per_good: null                    # [CẦN CHỐT] chỉ dùng khi strategy=profit
+  loss_per_bad: null                       # [CẦN CHỐT] chỉ dùng khi strategy=profit
   risk_tranches: 10                        # [p.50] A (rủi ro cao) ... J (thấp)
 
 # ---------------------------------------------------------------------
