@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from app import common
+from app import common, dash
 from core import binning
 
 
@@ -52,6 +52,14 @@ def render():
     summ["số gợi ý"] = summ["variable"].map(sug_counts)
     from core import selection
     summ["iv_band"] = summ["iv"].map(lambda x: selection.iv_band(x, cfg))
+    with st.expander("📊 Dashboard binning: xếp hạng IV & số bin", expanded=True):
+        top = summ.head(30).iloc[::-1]
+        cmap = {"useless": "#bbbbbb", "weak": "#f2cc8f", "medium": "#81b29a", "strong": "#2a9d8f", "suspicious": "#d1495b"}
+        fig = dash.bar_chart(top["variable"], top["iv"], "Information Value (top 30 biến)", horizontal=True, height=max(320, 18 * len(top) + 100), color=[cmap[b] for b in top["iv_band"]])
+        for t_, lab in ((cfg["selection"]["iv"]["useless_below"], "loại"), (cfg["selection"]["iv"]["medium_below"], "trung bình")):
+            fig.add_vline(x=t_, line_dash="dot", annotation_text=lab)
+        st.plotly_chart(fig, use_container_width=True)
+        st.caption("Màu: xám = vô dụng · vàng = yếu · xanh nhạt = trung bình · xanh đậm = mạnh · đỏ = nghi ngờ rò rỉ (theo ngưỡng IV trong cấu hình).")
     st.dataframe(summ.style.format({"iv": "{:.3f}"}), use_container_width=True, height=240)
 
     var = st.selectbox("Chọn biến để xem / chỉnh", summ["variable"].tolist(), key="bin_var")

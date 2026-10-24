@@ -8,13 +8,16 @@ import pickle
 import numpy as np
 import pandas as pd
 
-from . import binning, config as cfgmod, scorecard
+from . import binning, config as cfgmod, profiles, scorecard
 
 
 def build_bundle(cfg: dict, model: dict, specs: dict, points: pd.DataFrame, cutoff: dict | None, cleaning_log: dict | None = None,
-                 segment: dict | None = None) -> dict:
-    """Gói mô hình đủ để chấm điểm file mới (cần specs có 'woe')."""
-    return {"config": cfg, "config_hash": cfgmod.config_hash(cfg), "model": model,
+                 segment: dict | None = None, profile: dict | None = None) -> dict:
+    """Gói mô hình đủ để chấm điểm file mới (cần specs có 'woe'). profile: hồ sơ dữ liệu để tái tạo cột ngày/cột suy ra khi chấm file thô."""
+    slim = None
+    if profile:
+        slim = {k: profile[k] for k in ("name", "date_formats", "derived", "drop_after_derive") if k in profile}
+    return {"config": cfg, "config_hash": cfgmod.config_hash(cfg), "profile": slim, "model": model,
             "specs": {v: specs[v] for v in model["variables"]}, "points": points, "cutoff": cutoff,
             "cleaning_log": cleaning_log, "segment": segment}
 
@@ -31,6 +34,10 @@ def bundle_from_bytes(blob: bytes) -> dict:
 def score_new_data(bundle: dict, df: pd.DataFrame) -> pd.DataFrame:
     """Chấm điểm file mới: thêm score, pd, zone (nếu có cutoff). Thiếu cột → lỗi rõ ràng."""
     need = bundle["model"]["variables"]
+    prof = bundle.get("profile")
+    if prof:                                                   # file thô: parse ngày + tạo cột suy ra như lúc huấn luyện
+        df = profiles.parse_dates(df, prof.get("date_formats"))
+        df, _ = profiles.apply_derived(df, prof)
     miss = [v for v in need if v not in df.columns]
     if miss:
         raise ValueError("File thiếu cột: " + ", ".join(miss))

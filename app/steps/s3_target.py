@@ -3,8 +3,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from app import common
-from core import demo, ingest, performance, target, vintage
+from app import common, dash
+from core import dashboard as D, demo, ingest, performance, target, vintage
 
 SRC_NONE = "Không dùng vintage (tự nhập performance window ở trang quy tắc)"
 SRC_MAIN = "Chọn trường có sẵn trong file chính"
@@ -48,15 +48,25 @@ def _source_ui(df, mapping, cfg):
     if src == SRC_MAIN:
         P["sub"] = st.radio("Kiểu trường có sẵn", [B_SUM, B_WIDE], horizontal=True, key="v_sub")
         if P["sub"] == B_SUM:
+            hint = ss.get("profile", {}).get("vintage_hint") if ss.get("profile") else None
+            hint = hint if hint and hint.get("first_bad_date_col") in df.columns else None
             c1, c2 = st.columns(2)
             with c1:
-                P["fb_kind"] = st.radio("Cột bad đầu tiên là", ["MOB (số tháng)", "Ngày bad đầu tiên"], key="v_fbk")
-                P["fb"] = _pick("Cột MOB/ngày bad đầu tiên (rỗng = chưa bad)", cols, mapping.get("first_bad_mob"), "v_fb")
+                P["fb_kind"] = st.radio("Cột bad đầu tiên là", ["MOB (số tháng)", "Ngày bad đầu tiên"], index=1 if hint else 0, key="v_fbk")
+                P["fb"] = _pick("Cột MOB/ngày bad đầu tiên (rỗng = chưa bad)", cols, hint["first_bad_date_col"] if hint else mapping.get("first_bad_mob"), "v_fb")
+                if mapping.get("status_col"):
+                    P["only_bad"] = st.checkbox("Chỉ tính cho khoản vay có trạng thái BAD (các khoản khác coi là chưa bad)", value=bool(hint and hint.get("only_if_bad")), key="v_onlybad",
+                                                help="Vd Lending Club: ngày thanh toán cuối chỉ có ý nghĩa là thời điểm vỡ nợ với khoản Charged Off.")
             with c2:
-                P["ob_kind"] = st.radio("Quan sát đến khi nào", ["Cột số tháng đã quan sát", "Cột ngày quan sát", "Một ngày cắt dữ liệu chung"], key="v_obk")
+                P["ob_kind"] = st.radio("Quan sát đến khi nào", ["Cột số tháng đã quan sát", "Cột ngày quan sát", "Một ngày cắt dữ liệu chung"], index=2 if hint else 0, key="v_obk")
                 if P["ob_kind"] == "Một ngày cắt dữ liệu chung":
-                    mx = pd.to_datetime(df[P["open"]], errors="coerce").max() if P["open"] else pd.Timestamp.today()
-                    P["asof"] = st.date_input("Ngày cắt dữ liệu", value=(mx + pd.DateOffset(years=1)).date(), key="v_asof")
+                    if hint and hint.get("asof_col") in df.columns:
+                        mx = pd.to_datetime(df[hint["asof_col"]], errors="coerce").max()
+                        dflt = mx.date() if pd.notna(mx) else pd.Timestamp.today().date()
+                    else:
+                        mx = pd.to_datetime(df[P["open"]], errors="coerce").max() if P["open"] else pd.Timestamp.today()
+                        dflt = (mx + pd.DateOffset(years=1)).date()
+                    P["asof"] = st.date_input("Ngày cắt dữ liệu", value=dflt, key="v_asof")
                 else:
                     P["ob"] = _pick("Cột số tháng/ngày quan sát", cols, mapping.get("months_observed"), "v_ob")
             st.caption("Ngưỡng bad của các cột này đã cố định theo cách bạn tạo ra chúng (không đổi được trên UI).")
@@ -113,7 +123,7 @@ def _drop_from_features(cols):
         st.session_state["vint_dropped"] = sorted(set(ss.get("vint_dropped", []) + gone))
 
 
-def _prepare(df, P):
+def _prepare(df, P, mapping, cfg):
     """Chuẩn hoá nguồn → ss.perf_long (panel) hoặc ss.loans_v (cột tổng hợp). Ném PerformanceError nếu thiếu cấu hình."""
     ss = st.session_state
     if P["kind"] == SRC_MAIN and P["sub"] == B_SUM:
@@ -123,8 +133,11 @@ def _prepare(df, P):
         if obs_kind != "asof" and not P.get("ob"):
             raise performance.PerformanceError("Cần chọn cột quan sát.")
         _drop_from_features([c for c in (P["fb"], P.get("ob")) if c])
+        bad_mask = None
+        if P.get("only_bad") and mapping.get("status_col"):
+            bad_mask = df[mapping["status_col"]].isin(cfg["target"]["status"]["bad"])
         ss.loans_v = performance.loans_from_main_summary(df, P["open"], P["fb"], "date" if P["fb_kind"].startswith("Ngày") else "mob",
-                                                         P.get("ob"), obs_kind, P.get("asof"))
+                                                         P.get("ob"), obs_kind, P.get("asof"), bad_mask)
         ss.vsrc = {"kind": "summary"}
         ss.pop("perf_long", None)
         return
@@ -184,7 +197,7 @@ def render():
         ready = P["kind"] == SRC_MAIN or "perf_raw" in ss
         if ready and st.button("Chuẩn hoá & kiểm tra dữ liệu", key="btn_prepare"):
             try:
-                _prepare(df, P)
+                _prepare(df, P, mapping, cfg)
                 ss.pop("vint", None)
             except (performance.PerformanceError, KeyError, ValueError) as e:
                 st.error(f"Không chuẩn hoá được: {e}")
@@ -265,7 +278,7 @@ def render():
                 else:
                     loans_t, fields = ss.loans_v, ["first_bad_mob", "months_observed"]
                 df_t, map_t = performance.apply_loans(df, mapping, loans_t, fields)
-            errs = performance.target_source_errors(map_t)
+            errs = performance.target_source_errors(map_t, cfg)
             if errs:
                 st.error(errs[0])
             else:
@@ -284,6 +297,24 @@ def render():
         with c2:
             st.plotly_chart(px.pie(summ.reset_index(names="status"), names="status", values="count", hole=0.4, title="Phân bố trạng thái"), use_container_width=True)
         st.dataframe(target.exclusion_reasons(tgt), use_container_width=True)
+        with st.expander("📊 Dashboard target: bad rate theo thời gian và theo biến", expanded=True):
+            date_col = mapping.get("open_date")
+            dd = df.loc[ss.dev]
+            y_dev = tgt.loc[ss.dev, "y"]
+            dash.metrics_row([("Mẫu phát triển", f"{int(ss.dev.sum()):,}"), ("Bad", f"{int((y_dev == 1).sum()):,}"), ("Bad rate", common.pct(y_dev.mean())),
+                              ("Bị loại/chưa xác định", f"{(~ss.dev).mean():.1%}")])
+            if date_col and date_col in df.columns:
+                vol = D.volume_by_period(dd, date_col, y_dev, cfg["dashboard"]["time_freq"])
+                st.plotly_chart(dash.time_chart(vol, "Khoản vay trong mẫu phát triển & bad rate theo kỳ mở"), use_container_width=True)
+                stat = pd.crosstab(D.to_period(df[date_col], "Y"), tgt["status"])
+                fig = go.Figure()
+                palette = {"good": "#2a9d8f", "bad": "#d1495b", "excluded": "#bbbbbb", "indeterminate": "#f2cc8f"}
+                for col in stat.columns:
+                    fig.add_bar(x=stat.index, y=stat[col], name=col, marker_color=palette.get(col))
+                fig.update_layout(barmode="stack", title="Trạng thái nhãn theo năm mở (khoản chưa xác định/bị loại ở các năm gần đây cho thấy hiệu ứng đáo hạn)", height=340)
+                st.plotly_chart(fig, use_container_width=True)
+            dash.feature_dashboard(dd, y_dev, [f for f in ss.feats if dd[f].nunique() > 1], cfg, "s3", date_col=date_col if date_col in dd.columns else None,
+                                   notes=ss.get("col_notes", {}))
         n_dev = int(ss.dev.sum())
         if n_dev == 0 or tgt["y"].nunique() < 2:
             st.error("Mẫu phát triển rỗng hoặc chỉ có một lớp – kiểm tra định nghĩa bad/good.")

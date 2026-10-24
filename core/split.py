@@ -15,8 +15,13 @@ def split_indices(df: pd.DataFrame, y: pd.Series, cfg: dict, date_col: str | Non
         if not date_col:
             raise ValueError("OOT cần cột ngày.")
         d = pd.to_datetime(df.loc[idx, date_col])
-        cut = d.max() - pd.DateOffset(months=sp["oot"]["months"])
-        oot_idx = idx[(d > cut).to_numpy()]
+        if sp["oot"].get("pct"):                               # OOT = phần trăm cuối theo thời gian
+            order = d.sort_values(kind="stable").index
+            n_oot = int(round(len(order) * sp["oot"]["pct"]))
+            oot_idx = pd.Index(order[len(order) - n_oot:])
+        else:
+            cut = d.max() - pd.DateOffset(months=sp["oot"]["months"])
+            oot_idx = idx[(d > cut).to_numpy()]
         idx = idx.difference(oot_idx)
     if sp["method"] == "time":
         if not date_col:

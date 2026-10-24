@@ -1,0 +1,11 @@
+name: generic
+title: Tổng quát (tự ánh xạ cột)
+description: Không áp dụng quy tắc riêng; bạn tự ánh xạ cột ở bước 1.
+mapping: {}
+date_formats: {}
+config_overrides: {}
+derived: []
+drop_after_derive: []
+identifier_columns: []
+leakage_columns: []
+dictionary: {}

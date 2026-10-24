@@ -11,8 +11,12 @@ def _special_mask(s: pd.Series, specials: list) -> pd.Series:
     return s.isin(specials)
 
 
-def analyze(df: pd.DataFrame, features: list[str], cfg: dict) -> pd.DataFrame:
-    """Bảng phân tích mỗi biến + cột 'suggestion' (hành động đề xuất) và 'reason'."""
+def analyze(df: pd.DataFrame, features: list[str], cfg: dict, forced_drop: dict[str, str] | None = None) -> pd.DataFrame:
+    """Bảng phân tích mỗi biến + cột 'suggestion' (hành động đề xuất) và 'reason'.
+
+    forced_drop: {cột: lý do} các cột phải loại theo hồ sơ dữ liệu (rò rỉ, định danh…).
+    """
+    forced_drop = forced_drop or {}
     cl = cfg["cleaning"]
     specials = cl.get("special_values") or []
     rules = cl.get("impossible_value_rules") or {}
@@ -41,8 +45,14 @@ def analyze(df: pd.DataFrame, features: list[str], cfg: dict) -> pd.DataFrame:
             sugg, reason = "drop", "hằng số"
         elif cl.get("drop_constant") and nun > 1 and (s.value_counts(normalize=True, dropna=False).iloc[0] >= 0.999):
             sugg, reason = "drop", "gần hằng số (>=99.9% một giá trị)"
+        elif c in forced_drop:
+            sugg, reason = "drop", forced_drop[c]
         elif miss > cl["max_missing_pct"]:
             sugg, reason = "drop", f"missing {miss:.0%} > ngưỡng {cl['max_missing_pct']:.0%}"
+        elif (not is_num) and nun > cl.get("max_unique_categorical", 10**9) and not pd.api.types.is_datetime64_any_dtype(s):
+            sugg, reason = "drop", f"{nun} giá trị chữ > ngưỡng {cl['max_unique_categorical']}"
+        elif (not pd.api.types.is_float_dtype(s)) and len(s) >= 1000 and nun / max(s.notna().sum(), 1) >= cl.get("identifier_unique_ratio", 2):
+            sugg, reason = "drop", "gần như định danh (hầu hết giá trị duy nhất)"
         elif row["special_pct"] > 0:
             sugg, reason = "review", f"có {row['special_pct']:.1%} giá trị đặc biệt → bin riêng"
         elif not np.isnan(row["impossible_pct"]) and row["impossible_pct"] > 0:

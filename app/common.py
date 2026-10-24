@@ -17,7 +17,7 @@ from core.store import Store  # noqa: E402
 
 # Khoá state theo bước; chạy lại một bước thì các bước sau bị xoá (nguyên tắc 3: quay lại sửa rồi chạy lại).
 PIPELINE = [
-    ("data", ["raw", "mapping", "feats_all", "perf_raw", "perf_long", "perf_quality", "vsrc"]),
+    ("data", ["raw", "mapping", "feats_all", "perf_raw", "perf_long", "perf_quality", "vsrc", "profile", "forced_drop", "col_notes", "derived_cols", "perf_cols"]),
     ("clean", ["clean_an", "clean_log", "feats", "df_clean"]),
     ("target", ["tgt", "dev", "vint", "vint_info", "loans_v", "target_ok"]),
     ("split", ["parts", "split_tab", "seg", "seg_res", "D", "y"]),
