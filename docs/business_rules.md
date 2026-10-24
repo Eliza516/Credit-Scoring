@@ -6,6 +6,18 @@ File cấu hình tương ứng: `config/business.example.yaml`.
 Ký hiệu: ✅ lấy từ slide · 🟡 đề xuất của Claude (slide không nêu) · ❓ **cần bạn chốt**.
 Mọi ngưỡng chỉ **kích hoạt gợi ý** trên UI; người dùng chấp nhận/bỏ/sửa, hệ thống không tự áp dụng.
 
+## 0. Hồ sơ dữ liệu (dataset profile)
+Mỗi bộ dữ liệu có một **hồ sơ** trong `config/profiles/<tên>.yaml` (chọn ở bước 1): ánh xạ cột (ID, ngày mở, cột trạng thái), định dạng ngày, định nghĩa nhãn từ cột trạng thái, bộ lọc khi đọc file lớn, cột suy ra, và danh sách cột **không được dùng làm biến** (rò rỉ/định danh). Hiện có:
+- `generic` – tự ánh xạ cột (kiểu DPD/performance như phần dưới).
+- `lending_club` – Kaggle *wordsforthewise/lending-club* (`accepted_2007_to_2018Q4`), theo từ điển 151 cột của repo Eliza516/lending-club-credit-scoring:
+  - **Nhãn:** `loan_status`: bad = *Charged Off*, good = *Fully Paid*; các trạng thái khác (Current, Late, In Grace Period, Default) là chưa xác định và bị loại khỏi mẫu phát triển ❓ (Default chỉ ~36 dòng; bạn có thể thêm vào bad ở bước 1).
+  - **Lọc:** chỉ khoản vay phát hành từ 2010; chỉ khoản **đã đáo hạn** (tháng phát hành + kỳ hạn ≤ tháng cuối của dữ liệu, lấy từ `last_pymnt_d`).
+  - **Chia:** theo thời gian 70% train / 15% test / 15% OOT (OOT theo phần trăm, `split.oot.pct`).
+  - **Rò rỉ:** 43 cột chỉ có sau khi vay hoặc không rõ thời điểm (vd `total_pymnt`, `recoveries`, `out_prncp`, `last_pymnt_*`, `hardship_*`, `settlement_*`) bị gợi ý loại ở bước 2; 3 cột định danh (`id`, `member_id`, `url`).
+  - **Cột suy ra:** `term_months`, `emp_length_years`, `credit_history_months` (= `issue_d` − `earliest_cr_line`), `fico_mid`; cột chữ nhiều giá trị (`zip_code`, `emp_title`, `title`…) bị gợi ý loại theo `cleaning.max_unique_categorical`.
+  - **Vintage:** ngày vỡ nợ xấp xỉ bằng `last_pymnt_d` của khoản *Charged Off* (chỉ tính cho khoản bad), quan sát tới ngày cuối dữ liệu.
+- **File lớn:** đọc theo khối, lọc sớm, lấy mẫu đều tối đa N dòng (mặc định 300.000; 0 = lấy hết). **Nhiều file một lúc:** file cùng cấu trúc (≥ 90% cột trùng) tự gộp, file khác cấu trúc gán vai trò *dữ liệu chính / performance / bỏ qua*.
+
 ## 1. Định nghĩa target (p.20, p.29)
 | Mục | Quy tắc | |
 |---|---|---|

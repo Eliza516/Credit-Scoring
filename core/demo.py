@@ -118,3 +118,59 @@ def make_demo_performance(df: pd.DataFrame, max_mob: int = 24, seed: int = 7) ->
     snap = (opens + m).astype("datetime64[M]")
     return pd.DataFrame({"loan_id": df["loan_id"].to_numpy()[idx], "snapshot_month": pd.to_datetime(snap) + pd.offsets.MonthEnd(0),
                          "dpd": dpd.astype(int), "balance": bal})
+
+
+def make_lending_club_like(n: int = 20000, seed: int = 11) -> pd.DataFrame:
+    """Dữ liệu MÔ PHỎNG có cấu trúc giống Lending Club (không phải dữ liệu thật): cột trạng thái chữ, ngày dạng 'Dec-2015',
+    kỳ hạn '36 months', cột chỉ có sau khi vay (rò rỉ), cột nhiều giá trị chữ… để thử hồ sơ 'lending_club' khi chưa có file thật."""
+    rng = np.random.default_rng(seed)
+    issue = pd.Timestamp("2008-01-01") + pd.to_timedelta(rng.integers(0, 365 * 9, n), unit="D")
+    issue = issue.to_period("M").to_timestamp()
+    term = rng.choice([36, 60], n, p=[0.75, 0.25])
+    grade = rng.choice(list("ABCDEFG"), n, p=[0.17, 0.30, 0.28, 0.14, 0.07, 0.03, 0.01])
+    gi = np.array([ord(g) - 65 for g in grade])
+    int_rate = np.round(6 + 2.4 * gi + rng.normal(0, 1.2, n), 2)
+    fico = np.round(np.clip(740 - 12 * gi + rng.normal(0, 25, n), 620, 840) / 5) * 5
+    dti = np.clip(rng.normal(17, 8, n), 0, 60).round(2)
+    income = np.exp(rng.normal(11.1, 0.55, n)).round(-2)
+    loan = (np.clip(rng.normal(14000, 8000, n), 1000, 40000) // 25 * 25).astype(float)
+    home = rng.choice(["RENT", "MORTGAGE", "OWN"], n, p=[0.45, 0.42, 0.13])
+    purpose = rng.choice(["debt_consolidation", "credit_card", "home_improvement", "small_business", "other", "car"], n, p=[0.55, 0.2, 0.08, 0.04, 0.09, 0.04])
+    emp_len = rng.choice(["< 1 year", "1 year", "2 years", "3 years", "5 years", "10+ years", None], n, p=[0.08, 0.07, 0.1, 0.1, 0.1, 0.5, 0.05])
+    earliest = issue - pd.to_timedelta((rng.gamma(4, 1200, n) + 800).astype(int), unit="D")
+    revol_util = np.clip(rng.normal(52, 25, n), 0, 120).round(1)
+    z = (-4.0 + 0.35 * gi + 0.025 * (dti - 17) - 0.008 * (fico - 700) + 0.5 * (term == 60) - 0.35 * np.log(income / 60000)
+         + 0.004 * (revol_util - 50) + 0.25 * (purpose == "small_business") + rng.normal(0, 0.4, n))
+    lo, hi = -20.0, 20.0                                            # chọn hệ số chặn để tỷ lệ Charged Off ≈ 18%
+    for _ in range(50):
+        mid_c = (lo + hi) / 2
+        lo, hi = (lo, mid_c) if (1 / (1 + np.exp(-(z + mid_c)))).mean() > 0.18 else (mid_c, hi)
+    p_bad = 1 / (1 + np.exp(-(z + (lo + hi) / 2)))
+    bad = rng.random(n) < p_bad
+    end = pd.Timestamp("2018-12-01")
+    due = issue + pd.to_timedelta(term * 30.4, unit="D")
+    matured = due <= end
+    paid = ~bad
+    status = np.where(bad, "Charged Off", "Fully Paid").astype(object)
+    cur = (~matured) & (rng.random(n) < 0.8)                       # khoản chưa đáo hạn đa số còn "Current"
+    status[cur] = "Current"
+    late = (~cur) & (rng.random(n) < 0.01)
+    status[late] = rng.choice(["Late (31-120 days)", "In Grace Period", "Default"], late.sum())
+    life = np.where(bad, rng.integers(5, 30, n), term - rng.integers(0, 12, n))
+    lp = pd.Series(issue + pd.to_timedelta(life * 30.4, unit="D"))
+    last_pay = lp.where(lp <= end, end).dt.to_period("M").dt.to_timestamp()
+    last_pay = last_pay.where(~cur, end)
+    fmt = lambda s: pd.Series(s).dt.strftime("%b-%Y").to_numpy()  # noqa: E731
+    return pd.DataFrame({
+        "id": np.arange(40_000_000, 40_000_000 + n).astype(str), "member_id": np.nan, "loan_amnt": loan, "funded_amnt": loan,
+        "term": np.where(term == 36, " 36 months", " 60 months"), "int_rate": int_rate, "grade": grade,
+        "emp_title": rng.choice([f"title_{i}" for i in range(400)], n), "emp_length": emp_len, "home_ownership": home, "annual_inc": income,
+        "issue_d": fmt(issue), "loan_status": status, "purpose": purpose, "zip_code": rng.choice([f"{i:03d}xx" for i in range(100, 900)], n),
+        "addr_state": rng.choice(["CA", "NY", "TX", "FL", "IL", "NJ", "PA", "OH"], n), "dti": dti, "earliest_cr_line": fmt(earliest),
+        "fico_range_low": fico, "fico_range_high": fico + 4, "revol_util": revol_util, "open_acc": rng.poisson(11, n).astype(float),
+        "pub_rec": rng.poisson(0.2, n).astype(float), "inq_last_6mths": rng.poisson(0.9, n).astype(float),
+        "total_pymnt": np.where(bad, loan * rng.uniform(0.2, 0.7, n), loan * rng.uniform(1.05, 1.25, n)).round(2),
+        "recoveries": np.where(bad, loan * rng.uniform(0, 0.1, n), 0.0).round(2), "out_prncp": np.where(cur, loan * 0.4, 0.0),
+        "last_pymnt_d": fmt(last_pay), "last_fico_range_high": np.where(bad, fico - 40, fico + 5),
+        "all_empty_2012": np.nan,
+    })

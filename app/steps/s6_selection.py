@@ -2,7 +2,8 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from app import common
+from app import common, dash
+from core import dashboard as D
 from core import selection
 
 
@@ -33,6 +34,24 @@ def render():
         xs.append(names[st_]); ys.append(left)
     st.plotly_chart(go.Figure(go.Funnel(y=xs, x=ys, textinfo="value")).update_layout(height=320, title="Số biến còn lại sau mỗi bộ lọc"), use_container_width=True)
 
+    with st.expander("📊 Dashboard chọn biến: IV theo quyết định, tương quan, VIF", expanded=True):
+        top = f.sort_values("iv", ascending=False).head(30).iloc[::-1]
+        col = {"keep": "#2a9d8f", "review": "#f2cc8f", "drop": "#bbbbbb"}
+        st.plotly_chart(dash.bar_chart(top["variable"], top["iv"], "IV của 30 biến đầu (xanh = giữ · vàng = xem lại · xám = loại)", horizontal=True,
+                                       height=max(320, 18 * len(top) + 100), color=[col[x] for x in top["suggestion"]]), use_container_width=True)
+        kept = f[f["suggestion"] == "keep"]["variable"].tolist()
+        a, b = st.columns(2)
+        with a:
+            if len(kept) >= 2:
+                st.plotly_chart(dash.heatmap(D.corr_matrix(ss.W_tr, kept[:40], "pearson"), "Tương quan WoE giữa các biến được giữ"), use_container_width=True)
+            else:
+                st.info("Cần ≥ 2 biến được giữ để vẽ ma trận tương quan.")
+        with b:
+            v = f.dropna(subset=["vif"]).sort_values("vif", ascending=False).head(20).iloc[::-1]
+            if len(v):
+                fig = dash.bar_chart(v["variable"], v["vif"], "VIF (biến còn lại sau phễu)", horizontal=True, height=max(320, 18 * len(v) + 100))
+                fig.add_vline(x=cfg["selection"]["vif"]["threshold"], line_dash="dash", annotation_text="ngưỡng")
+                st.plotly_chart(fig, use_container_width=True)
     view = f.copy()
     view["dùng"] = view["suggestion"] == "keep"
     view = view[["variable", "dùng", "iv", "iv_band", "trend", "iv_test", "vif", "suggestion", "stage", "reason", "flags"]]

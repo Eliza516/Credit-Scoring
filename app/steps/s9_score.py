@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from app import common
+from app import common, dash
 from core import binning, evaluation, export, ingest, scorecard
 
 
@@ -41,6 +41,7 @@ def render():
     tt = evaluation.tranche_table(y_te.values, C["s_te"].values, cfg["cutoff"]["risk_tranches"])
     st.markdown("**Tranche rủi ro A→… (A = rủi ro cao nhất) trên Test**")
     st.dataframe(tt.style.format({"bad_rate": "{:.2%}", "cum_bad_pct": "{:.1%}", "cum_good_pct": "{:.1%}", "ks_gap": "{:.3f}", "score_min": "{:.0f}", "score_max": "{:.0f}"}), use_container_width=True)
+    st.plotly_chart(dash.bar_chart(tt["tranche"], tt["bad_rate"], "Bad rate theo tranche rủi ro (A = rủi ro cao nhất)", fmt=".1%", height=300), use_container_width=True)
     if cfg["evaluation"]["rank_ordering"]["require_monotonic_bad_rate"]:
         (st.success if tt.attrs["monotonic"] else st.warning)("Bad rate giảm đơn điệu qua các tranche." if tt.attrs["monotonic"] else "Bad rate KHÔNG đơn điệu qua các tranche – xem lại binning/biến.")
 
@@ -57,11 +58,19 @@ def render():
     lo, hi = scorecard.decision_zones(C["s"], cut, cfg)
     st.write(f"Vùng: **Reject** < {lo:.0f} · **Manual review** [{lo:.0f}, {hi:.0f}) · **Approve** ≥ {hi:.0f} (vùng xét tay ≈ {cfg['cutoff']['manual_review_band_width_pct']}% dân số).")
     z = scorecard.apply_zones(C["s"], lo, hi)
-    st.dataframe(scorecard.zone_summary(C["y"], z).style.format({"pct": "{:.1%}", "bad_rate": "{:.2%}"}), use_container_width=True)
+    zs = scorecard.zone_summary(C["y"], z)
+    a, b = st.columns(2)
+    with a:
+        fig = go.Figure(go.Pie(labels=zs["zone"], values=zs["count"], hole=0.45, sort=False))
+        fig.update_layout(title="Tỷ trọng theo vùng quyết định", height=300)
+        st.plotly_chart(fig, use_container_width=True)
+    with b:
+        st.plotly_chart(dash.bar_chart(zs["zone"], zs["bad_rate"], "Bad rate theo vùng", fmt=".1%", height=300), use_container_width=True)
+    st.dataframe(zs.style.format({"pct": "{:.1%}", "bad_rate": "{:.2%}"}), use_container_width=True)
     if st.button("✅ Chốt cutoff & lưu bảng điểm"):
         C.update(cutoff=cut, reject_below=lo, approve_from=hi)
         name = ss.seg["name"] if ss.get("seg") else "all"
-        bundle = export.build_bundle(cfg, model, ss.specs, pts, {"cutoff": cut, "reject_below": lo, "approve_from": hi}, ss.get("clean_log"), ss.get("seg"))
+        bundle = export.build_bundle(cfg, model, ss.specs, pts, {"cutoff": cut, "reject_below": lo, "approve_from": hi}, ss.get("clean_log"), ss.get("seg"), ss.get("profile"))
         ss.bundles[name] = bundle
         common.store().save("scorecard", {"points": pts, "cutoff": {"cutoff": cut, "lo": lo, "hi": hi}}, cfg)
         common.store().log(f"chốt scorecard tầng {name}, cutoff {cut}")

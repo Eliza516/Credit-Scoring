@@ -1,0 +1,727 @@
+name: lending_club
+title: Lending Club (Kaggle wordsforthewise/lending-club, accepted_2007_to_2018Q4)
+description: Nhãn lấy từ cột trạng thái khoản vay (loan_status); chia theo thời gian; loại cột chỉ có sau khi vay theo từ điển của repo Eliza516/lending-club-credit-scoring (giả thuyết 'biết được lúc nộp
+  đơn').
+mapping:
+  id: id
+  open_date: issue_d
+  status_col: loan_status
+date_formats:
+  issue_d: '%b-%Y'
+  earliest_cr_line: '%b-%Y'
+  last_pymnt_d: '%b-%Y'
+load:
+  keep_status: true
+  min_open_year: 2010
+  default_sample_rows: 300000
+  skip_columns:
+  - url
+  - desc
+  - emp_title
+  - title
+  - member_id
+config_overrides:
+  target:
+    status:
+      bad:
+      - Charged Off
+      good:
+      - Fully Paid
+      min_open_year: 2010
+      maturity:
+        enabled: true
+        term_col: term_months
+        asof_col: last_pymnt_d
+  split:
+    method: time
+    train_pct: 0.8235
+    test_pct: 0.1765
+    oot:
+      enabled: true
+      pct: 0.15
+      months: 3
+    min_goods: 2000
+    min_bads: 2000
+  vintage:
+    max_mob: 36
+vintage_hint:
+  first_bad_date_col: last_pymnt_d
+  only_if_bad: true
+  asof_col: last_pymnt_d
+derived:
+- name: term_months
+  op: extract_number
+  col: term
+- name: emp_length_years
+  op: extract_number
+  col: emp_length
+  overrides:
+    < 1 year: 0
+- name: credit_history_months
+  op: months_between
+  end: issue_d
+  start: earliest_cr_line
+- name: fico_mid
+  op: mean_of
+  cols:
+  - fico_range_low
+  - fico_range_high
+drop_after_derive:
+- term
+- emp_length
+- earliest_cr_line
+- fico_range_low
+- fico_range_high
+identifier_columns:
+- id
+- member_id
+- url
+leakage_columns:
+- funded_amnt
+- funded_amnt_inv
+- pymnt_plan
+- initial_list_status
+- policy_code
+- disbursement_method
+- out_prncp
+- out_prncp_inv
+- total_pymnt
+- total_pymnt_inv
+- total_rec_prncp
+- total_rec_int
+- total_rec_late_fee
+- recoveries
+- collection_recovery_fee
+- last_pymnt_d
+- last_pymnt_amnt
+- next_pymnt_d
+- last_credit_pull_d
+- last_fico_range_high
+- last_fico_range_low
+- hardship_flag
+- hardship_type
+- hardship_reason
+- hardship_status
+- deferral_term
+- hardship_amount
+- hardship_start_date
+- hardship_end_date
+- payment_plan_start_date
+- hardship_length
+- hardship_dpd
+- hardship_loan_status
+- orig_projected_additional_accrued_interest
+- hardship_payoff_balance_amount
+- hardship_last_payment_amount
+- debt_settlement_flag
+- debt_settlement_flag_date
+- settlement_status
+- settlement_date
+- settlement_amount
+- settlement_percentage
+- settlement_term
+dictionary:
+  id:
+    group: KHOAN_VAY
+    meaning: Mã khoản vay do Lending Club gán
+    known: Không
+  member_id:
+    group: KHOAN_VAY
+    meaning: Mã thành viên của người vay
+    known: Không
+  url:
+    group: KHOAN_VAY
+    meaning: Đường dẫn tới trang của khoản vay trên website Lending Club
+    known: Không
+  loan_amnt:
+    group: KHOAN_VAY
+    meaning: Số tiền người vay đề nghị vay (USD)
+    known: Có
+  funded_amnt:
+    group: KHOAN_VAY
+    meaning: Số tiền được duyệt/giải ngân cho khoản vay (USD)
+    known: Không rõ
+  funded_amnt_inv:
+    group: KHOAN_VAY
+    meaning: Số tiền do nhà đầu tư cấp cho khoản vay (USD)
+    known: Không rõ
+  term:
+    group: KHOAN_VAY
+    meaning: 'Kỳ hạn vay: 36 hoặc 60 tháng'
+    known: Có
+  int_rate:
+    group: KHOAN_VAY
+    meaning: Lãi suất của khoản vay (%/năm)
+    known: Có
+  installment:
+    group: KHOAN_VAY
+    meaning: Số tiền trả góp mỗi tháng (USD)
+    known: Có
+  grade:
+    group: KHOAN_VAY
+    meaning: Hạng rủi ro A-G do Lending Club gán
+    known: Có
+  sub_grade:
+    group: KHOAN_VAY
+    meaning: Hạng rủi ro chi tiết A1-G5 do Lending Club gán
+    known: Có
+  issue_d:
+    group: KHOAN_VAY
+    meaning: Tháng khoản vay được giải ngân (dùng để sắp xếp theo thời gian)
+    known: Không rõ
+  loan_status:
+    group: KHOAN_VAY
+    meaning: Trạng thái hiện tại của khoản vay (nguồn tạo nhãn)
+    known: Không
+  pymnt_plan:
+    group: KHOAN_VAY
+    meaning: Cờ cho biết khoản vay có kế hoạch trả nợ riêng hay không
+    known: Không rõ
+  purpose:
+    group: KHOAN_VAY
+    meaning: Mục đích vay do người vay chọn
+    known: Có
+  title:
+    group: KHOAN_VAY
+    meaning: Tiêu đề khoản vay do người vay viết
+    known: Có
+  desc:
+    group: KHOAN_VAY
+    meaning: Mô tả khoản vay do người vay viết
+    known: Có
+  initial_list_status:
+    group: KHOAN_VAY
+    meaning: Trạng thái niêm yết ban đầu của khoản vay (w hoặc f)
+    known: Không rõ
+  application_type:
+    group: KHOAN_VAY
+    meaning: Hồ sơ vay cá nhân (Individual) hay vay chung (Joint App)
+    known: Có
+  policy_code:
+    group: KHOAN_VAY
+    meaning: 'Mã chính sách: sản phẩm công khai hay không công khai'
+    known: Không rõ
+  disbursement_method:
+    group: KHOAN_VAY
+    meaning: 'Cách giải ngân: tiền mặt hay trả thẳng cho chủ nợ khác'
+    known: Không rõ
+  emp_title:
+    group: NGUOI_VAY
+    meaning: Chức danh công việc do người vay nhập
+    known: Có
+  emp_length:
+    group: NGUOI_VAY
+    meaning: Số năm làm việc ở công việc hiện tại (dưới 1 năm đến 10+ năm)
+    known: Có
+  home_ownership:
+    group: NGUOI_VAY
+    meaning: 'Tình trạng nhà ở: thuê, thế chấp, sở hữu,...'
+    known: Có
+  annual_inc:
+    group: NGUOI_VAY
+    meaning: Thu nhập hằng năm do người vay tự khai (USD)
+    known: Có
+  verification_status:
+    group: NGUOI_VAY
+    meaning: Thu nhập đã được Lending Club xác minh hay chưa
+    known: Có
+  zip_code:
+    group: NGUOI_VAY
+    meaning: 3 chữ số đầu của mã bưu chính người vay
+    known: Có
+  addr_state:
+    group: NGUOI_VAY
+    meaning: Bang nơi người vay sinh sống
+    known: Có
+  dti:
+    group: NGUOI_VAY
+    meaning: Tỷ lệ nợ phải trả hằng tháng trên thu nhập hằng tháng (%), không tính thế chấp nhà và khoản vay này
+    known: Có
+  delinq_2yrs:
+    group: TIN_DUNG_1
+    meaning: Số lần trễ hạn từ 30 ngày trở lên trong 2 năm gần nhất
+    known: Có
+  earliest_cr_line:
+    group: TIN_DUNG_1
+    meaning: Tháng mở tài khoản tín dụng đầu tiên
+    known: Có
+  fico_range_low:
+    group: TIN_DUNG_1
+    meaning: Cận dưới của khoảng điểm FICO lúc nộp đơn
+    known: Có
+  fico_range_high:
+    group: TIN_DUNG_1
+    meaning: Cận trên của khoảng điểm FICO lúc nộp đơn
+    known: Có
+  inq_last_6mths:
+    group: TIN_DUNG_1
+    meaning: Số lần bị tra cứu tín dụng trong 6 tháng gần nhất
+    known: Có
+  mths_since_last_delinq:
+    group: TIN_DUNG_1
+    meaning: Số tháng kể từ lần trễ hạn gần nhất
+    known: Có
+  mths_since_last_record:
+    group: TIN_DUNG_1
+    meaning: Số tháng kể từ hồ sơ công khai tiêu cực gần nhất
+    known: Có
+  open_acc:
+    group: TIN_DUNG_1
+    meaning: Số tài khoản tín dụng đang mở
+    known: Có
+  pub_rec:
+    group: TIN_DUNG_1
+    meaning: Số hồ sơ công khai tiêu cực
+    known: Có
+  revol_bal:
+    group: TIN_DUNG_1
+    meaning: Tổng dư nợ tín dụng quay vòng (USD)
+    known: Có
+  revol_util:
+    group: TIN_DUNG_1
+    meaning: Phần trăm hạn mức tín dụng quay vòng đã sử dụng
+    known: Có
+  total_acc:
+    group: TIN_DUNG_1
+    meaning: Tổng số tài khoản tín dụng từng có
+    known: Có
+  collections_12_mths_ex_med:
+    group: TIN_DUNG_1
+    meaning: Số khoản bị đòi nợ trong 12 tháng, không tính nợ y tế
+    known: Có
+  mths_since_last_major_derog:
+    group: TIN_DUNG_1
+    meaning: Số tháng kể từ lần vi phạm nghiêm trọng gần nhất (trễ từ 90 ngày)
+    known: Có
+  acc_now_delinq:
+    group: TIN_DUNG_1
+    meaning: Số tài khoản đang trễ hạn
+    known: Có
+  tot_coll_amt:
+    group: TIN_DUNG_1
+    meaning: Tổng số tiền từng bị đòi nợ (USD)
+    known: Có
+  tot_cur_bal:
+    group: TIN_DUNG_1
+    meaning: Tổng dư nợ hiện tại của mọi tài khoản (USD)
+    known: Có
+  open_acc_6m:
+    group: TIN_DUNG_1
+    meaning: Số tài khoản mở trong 6 tháng gần nhất
+    known: Có
+  open_act_il:
+    group: TIN_DUNG_1
+    meaning: Số tài khoản trả góp đang hoạt động
+    known: Có
+  open_il_12m:
+    group: TIN_DUNG_1
+    meaning: Số tài khoản trả góp mở trong 12 tháng gần nhất
+    known: Có
+  open_il_24m:
+    group: TIN_DUNG_1
+    meaning: Số tài khoản trả góp mở trong 24 tháng gần nhất
+    known: Có
+  mths_since_rcnt_il:
+    group: TIN_DUNG_1
+    meaning: Số tháng kể từ khi mở tài khoản trả góp gần nhất
+    known: Có
+  total_bal_il:
+    group: TIN_DUNG_1
+    meaning: Tổng dư nợ các tài khoản trả góp (USD)
+    known: Có
+  il_util:
+    group: TIN_DUNG_1
+    meaning: Tỷ lệ dư nợ trả góp trên hạn mức cao nhất
+    known: Có
+  open_rv_12m:
+    group: TIN_DUNG_1
+    meaning: Số tài khoản quay vòng mở trong 12 tháng gần nhất
+    known: Có
+  open_rv_24m:
+    group: TIN_DUNG_1
+    meaning: Số tài khoản quay vòng mở trong 24 tháng gần nhất
+    known: Có
+  max_bal_bc:
+    group: TIN_DUNG_1
+    meaning: Dư nợ lớn nhất trên các tài khoản quay vòng (USD)
+    known: Có
+  all_util:
+    group: TIN_DUNG_1
+    meaning: Tỷ lệ sử dụng trên tổng hạn mức của mọi tài khoản
+    known: Có
+  total_rev_hi_lim:
+    group: TIN_DUNG_1
+    meaning: Tổng hạn mức cao nhất của các tài khoản quay vòng (USD)
+    known: Có
+  inq_fi:
+    group: TIN_DUNG_1
+    meaning: Số lần tra cứu tín dụng của công ty tài chính cá nhân
+    known: Có
+  total_cu_tl:
+    group: TIN_DUNG_1
+    meaning: Số tài khoản tài chính (finance trades)
+    known: Có
+  inq_last_12m:
+    group: TIN_DUNG_1
+    meaning: Số lần bị tra cứu tín dụng trong 12 tháng gần nhất
+    known: Có
+  acc_open_past_24mths:
+    group: TIN_DUNG_1
+    meaning: Số tài khoản mở trong 24 tháng gần nhất
+    known: Có
+  avg_cur_bal:
+    group: TIN_DUNG_1
+    meaning: Dư nợ hiện tại trung bình mỗi tài khoản (USD)
+    known: Có
+  bc_open_to_buy:
+    group: TIN_DUNG_1
+    meaning: Hạn mức còn lại trên các thẻ ngân hàng quay vòng (USD)
+    known: Có
+  bc_util:
+    group: TIN_DUNG_1
+    meaning: Tỷ lệ sử dụng hạn mức trên các thẻ ngân hàng
+    known: Có
+  chargeoff_within_12_mths:
+    group: TIN_DUNG_1
+    meaning: Số lần bị xóa nợ trong 12 tháng gần nhất
+    known: Có
+  delinq_amnt:
+    group: TIN_DUNG_1
+    meaning: Số tiền đang trễ hạn (USD)
+    known: Có
+  mo_sin_old_il_acct:
+    group: TIN_DUNG_2
+    meaning: Số tháng kể từ khi mở tài khoản trả góp lâu đời nhất
+    known: Có
+  mo_sin_old_rev_tl_op:
+    group: TIN_DUNG_2
+    meaning: Số tháng kể từ khi mở tài khoản quay vòng lâu đời nhất
+    known: Có
+  mo_sin_rcnt_rev_tl_op:
+    group: TIN_DUNG_2
+    meaning: Số tháng kể từ khi mở tài khoản quay vòng gần nhất
+    known: Có
+  mo_sin_rcnt_tl:
+    group: TIN_DUNG_2
+    meaning: Số tháng kể từ khi mở tài khoản bất kỳ gần nhất
+    known: Có
+  mort_acc:
+    group: TIN_DUNG_2
+    meaning: Số tài khoản thế chấp nhà
+    known: Có
+  mths_since_recent_bc:
+    group: TIN_DUNG_2
+    meaning: Số tháng kể từ khi mở thẻ ngân hàng gần nhất
+    known: Có
+  mths_since_recent_bc_dlq:
+    group: TIN_DUNG_2
+    meaning: Số tháng kể từ lần trễ hạn thẻ ngân hàng gần nhất
+    known: Có
+  mths_since_recent_inq:
+    group: TIN_DUNG_2
+    meaning: Số tháng kể từ lần bị tra cứu tín dụng gần nhất
+    known: Có
+  mths_since_recent_revol_delinq:
+    group: TIN_DUNG_2
+    meaning: Số tháng kể từ lần trễ hạn tài khoản quay vòng gần nhất
+    known: Có
+  num_accts_ever_120_pd:
+    group: TIN_DUNG_2
+    meaning: Số tài khoản từng trễ hạn từ 120 ngày
+    known: Có
+  num_actv_bc_tl:
+    group: TIN_DUNG_2
+    meaning: Số thẻ ngân hàng đang hoạt động
+    known: Có
+  num_actv_rev_tl:
+    group: TIN_DUNG_2
+    meaning: Số tài khoản quay vòng đang hoạt động
+    known: Có
+  num_bc_sats:
+    group: TIN_DUNG_2
+    meaning: Số thẻ ngân hàng đang ở trạng thái tốt
+    known: Có
+  num_bc_tl:
+    group: TIN_DUNG_2
+    meaning: Tổng số thẻ ngân hàng
+    known: Có
+  num_il_tl:
+    group: TIN_DUNG_2
+    meaning: Số tài khoản trả góp
+    known: Có
+  num_op_rev_tl:
+    group: TIN_DUNG_2
+    meaning: Số tài khoản quay vòng đang mở
+    known: Có
+  num_rev_accts:
+    group: TIN_DUNG_2
+    meaning: Số tài khoản quay vòng
+    known: Có
+  num_rev_tl_bal_gt_0:
+    group: TIN_DUNG_2
+    meaning: Số tài khoản quay vòng có dư nợ lớn hơn 0
+    known: Có
+  num_sats:
+    group: TIN_DUNG_2
+    meaning: Số tài khoản đang ở trạng thái tốt
+    known: Có
+  num_tl_120dpd_2m:
+    group: TIN_DUNG_2
+    meaning: Số tài khoản trễ hạn từ 120 ngày (cập nhật trong 2 tháng)
+    known: Có
+  num_tl_30dpd:
+    group: TIN_DUNG_2
+    meaning: Số tài khoản đang trễ hạn 30 ngày (cập nhật trong 2 tháng)
+    known: Có
+  num_tl_90g_dpd_24m:
+    group: TIN_DUNG_2
+    meaning: Số tài khoản trễ hạn từ 90 ngày trong 24 tháng gần nhất
+    known: Có
+  num_tl_op_past_12m:
+    group: TIN_DUNG_2
+    meaning: Số tài khoản mở trong 12 tháng gần nhất
+    known: Có
+  pct_tl_nvr_dlq:
+    group: TIN_DUNG_2
+    meaning: Phần trăm tài khoản chưa từng trễ hạn
+    known: Có
+  percent_bc_gt_75:
+    group: TIN_DUNG_2
+    meaning: Phần trăm thẻ ngân hàng đã dùng trên 75% hạn mức
+    known: Có
+  pub_rec_bankruptcies:
+    group: TIN_DUNG_2
+    meaning: Số lần phá sản trong hồ sơ công khai
+    known: Có
+  tax_liens:
+    group: TIN_DUNG_2
+    meaning: Số lần bị cầm giữ tài sản vì thuế
+    known: Có
+  tot_hi_cred_lim:
+    group: TIN_DUNG_2
+    meaning: Tổng hạn mức tín dụng cao nhất (USD)
+    known: Có
+  total_bal_ex_mort:
+    group: TIN_DUNG_2
+    meaning: Tổng dư nợ, không tính thế chấp nhà (USD)
+    known: Có
+  total_bc_limit:
+    group: TIN_DUNG_2
+    meaning: Tổng hạn mức các thẻ ngân hàng (USD)
+    known: Có
+  total_il_high_credit_limit:
+    group: TIN_DUNG_2
+    meaning: Tổng hạn mức cao nhất của các tài khoản trả góp (USD)
+    known: Có
+  annual_inc_joint:
+    group: VAY_CHUNG
+    meaning: Thu nhập hằng năm gộp của hai người vay chung (USD)
+    known: Có
+  dti_joint:
+    group: VAY_CHUNG
+    meaning: Tỷ lệ nợ trên thu nhập gộp của hai người vay chung (%)
+    known: Có
+  verification_status_joint:
+    group: VAY_CHUNG
+    meaning: Thu nhập gộp của hai người vay chung đã được xác minh hay chưa
+    known: Có
+  revol_bal_joint:
+    group: VAY_CHUNG
+    meaning: Tổng dư nợ quay vòng gộp của hai người vay chung (USD)
+    known: Có
+  sec_app_fico_range_low:
+    group: VAY_CHUNG
+    meaning: Cận dưới điểm FICO của người vay thứ hai
+    known: Có
+  sec_app_fico_range_high:
+    group: VAY_CHUNG
+    meaning: Cận trên điểm FICO của người vay thứ hai
+    known: Có
+  sec_app_earliest_cr_line:
+    group: VAY_CHUNG
+    meaning: Tháng mở tài khoản tín dụng đầu tiên của người vay thứ hai
+    known: Có
+  sec_app_inq_last_6mths:
+    group: VAY_CHUNG
+    meaning: Số lần tra cứu tín dụng 6 tháng của người vay thứ hai
+    known: Có
+  sec_app_mort_acc:
+    group: VAY_CHUNG
+    meaning: Số tài khoản thế chấp của người vay thứ hai
+    known: Có
+  sec_app_open_acc:
+    group: VAY_CHUNG
+    meaning: Số tài khoản đang mở của người vay thứ hai
+    known: Có
+  sec_app_revol_util:
+    group: VAY_CHUNG
+    meaning: Phần trăm hạn mức quay vòng đã dùng của người vay thứ hai
+    known: Có
+  sec_app_open_act_il:
+    group: VAY_CHUNG
+    meaning: Số tài khoản trả góp đang hoạt động của người vay thứ hai
+    known: Có
+  sec_app_num_rev_accts:
+    group: VAY_CHUNG
+    meaning: Số tài khoản quay vòng của người vay thứ hai
+    known: Có
+  sec_app_chargeoff_within_12_mths:
+    group: VAY_CHUNG
+    meaning: Số lần bị xóa nợ 12 tháng của người vay thứ hai
+    known: Có
+  sec_app_collections_12_mths_ex_med:
+    group: VAY_CHUNG
+    meaning: Số khoản bị đòi nợ 12 tháng (trừ y tế) của người vay thứ hai
+    known: Có
+  sec_app_mths_since_last_major_derog:
+    group: VAY_CHUNG
+    meaning: Số tháng kể từ lần vi phạm nghiêm trọng gần nhất của người vay thứ hai
+    known: Có
+  out_prncp:
+    group: SAU_KHI_VAY
+    meaning: Số tiền gốc còn nợ (USD)
+    known: Không
+  out_prncp_inv:
+    group: SAU_KHI_VAY
+    meaning: Số tiền gốc còn nợ phần do nhà đầu tư cấp (USD)
+    known: Không
+  total_pymnt:
+    group: SAU_KHI_VAY
+    meaning: Tổng số tiền đã thu được cho đến nay (USD)
+    known: Không
+  total_pymnt_inv:
+    group: SAU_KHI_VAY
+    meaning: Tổng số tiền đã thu được phần của nhà đầu tư (USD)
+    known: Không
+  total_rec_prncp:
+    group: SAU_KHI_VAY
+    meaning: Tổng tiền gốc đã thu được (USD)
+    known: Không
+  total_rec_int:
+    group: SAU_KHI_VAY
+    meaning: Tổng tiền lãi đã thu được (USD)
+    known: Không
+  total_rec_late_fee:
+    group: SAU_KHI_VAY
+    meaning: Tổng phí trả chậm đã thu được (USD)
+    known: Không
+  recoveries:
+    group: SAU_KHI_VAY
+    meaning: Số tiền thu hồi được sau khi khoản vay bị xóa nợ (USD)
+    known: Không
+  collection_recovery_fee:
+    group: SAU_KHI_VAY
+    meaning: Phí thu hồi nợ sau khi bị xóa nợ (USD)
+    known: Không
+  last_pymnt_d:
+    group: SAU_KHI_VAY
+    meaning: Tháng nhận được khoản thanh toán gần nhất
+    known: Không
+  last_pymnt_amnt:
+    group: SAU_KHI_VAY
+    meaning: Số tiền của khoản thanh toán gần nhất (USD)
+    known: Không
+  next_pymnt_d:
+    group: SAU_KHI_VAY
+    meaning: Tháng dự kiến của khoản thanh toán tiếp theo
+    known: Không
+  last_credit_pull_d:
+    group: SAU_KHI_VAY
+    meaning: Tháng Lending Club kéo hồ sơ tín dụng lần gần nhất
+    known: Không
+  last_fico_range_high:
+    group: SAU_KHI_VAY
+    meaning: Cận trên điểm FICO ở lần kéo hồ sơ tín dụng gần nhất
+    known: Không
+  last_fico_range_low:
+    group: SAU_KHI_VAY
+    meaning: Cận dưới điểm FICO ở lần kéo hồ sơ tín dụng gần nhất
+    known: Không
+  hardship_flag:
+    group: KHO_KHAN
+    meaning: Cờ cho biết người vay có kế hoạch hỗ trợ khó khăn tài chính hay không
+    known: Không
+  hardship_type:
+    group: KHO_KHAN
+    meaning: Loại kế hoạch hỗ trợ khó khăn
+    known: Không
+  hardship_reason:
+    group: KHO_KHAN
+    meaning: Lý do xin hỗ trợ khó khăn
+    known: Không
+  hardship_status:
+    group: KHO_KHAN
+    meaning: Trạng thái kế hoạch hỗ trợ khó khăn
+    known: Không
+  deferral_term:
+    group: KHO_KHAN
+    meaning: Số tháng được hoãn trả theo kế hoạch hỗ trợ
+    known: Không
+  hardship_amount:
+    group: KHO_KHAN
+    meaning: Số tiền được hỗ trợ theo kế hoạch (USD)
+    known: Không
+  hardship_start_date:
+    group: KHO_KHAN
+    meaning: Ngày bắt đầu kế hoạch hỗ trợ
+    known: Không
+  hardship_end_date:
+    group: KHO_KHAN
+    meaning: Ngày kết thúc kế hoạch hỗ trợ
+    known: Không
+  payment_plan_start_date:
+    group: KHO_KHAN
+    meaning: Ngày bắt đầu kế hoạch trả nợ mới
+    known: Không
+  hardship_length:
+    group: KHO_KHAN
+    meaning: Số tháng của kế hoạch hỗ trợ
+    known: Không
+  hardship_dpd:
+    group: KHO_KHAN
+    meaning: Số ngày trễ hạn tại thời điểm bắt đầu kế hoạch hỗ trợ
+    known: Không
+  hardship_loan_status:
+    group: KHO_KHAN
+    meaning: Trạng thái khoản vay tại thời điểm bắt đầu kế hoạch hỗ trợ
+    known: Không
+  orig_projected_additional_accrued_interest:
+    group: KHO_KHAN
+    meaning: Lãi dự kiến cộng thêm do kế hoạch hỗ trợ (USD)
+    known: Không
+  hardship_payoff_balance_amount:
+    group: KHO_KHAN
+    meaning: Số dư cần trả hết khi bắt đầu kế hoạch hỗ trợ (USD)
+    known: Không
+  hardship_last_payment_amount:
+    group: KHO_KHAN
+    meaning: Số tiền thanh toán cuối cùng trước khi bắt đầu kế hoạch hỗ trợ (USD)
+    known: Không
+  debt_settlement_flag:
+    group: TAT_TOAN
+    meaning: Cờ cho biết khoản vay đã chuyển sang công ty tất toán nợ hay chưa
+    known: Không
+  debt_settlement_flag_date:
+    group: TAT_TOAN
+    meaning: Ngày cờ tất toán nợ được cập nhật gần nhất
+    known: Không
+  settlement_status:
+    group: TAT_TOAN
+    meaning: Trạng thái của thỏa thuận tất toán nợ
+    known: Không
+  settlement_date:
+    group: TAT_TOAN
+    meaning: Ngày đạt thỏa thuận tất toán nợ
+    known: Không
+  settlement_amount:
+    group: TAT_TOAN
+    meaning: Số tiền thỏa thuận tất toán (USD)
+    known: Không
+  settlement_percentage:
+    group: TAT_TOAN
+    meaning: Phần trăm số dư mà người vay đồng ý trả khi tất toán
+    known: Không
+  settlement_term:
+    group: TAT_TOAN
+    meaning: Số tháng của thỏa thuận tất toán
+    known: Không

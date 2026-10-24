@@ -18,6 +18,7 @@ columns:
   id: null
   open_date: null                          # ngày mở hợp đồng / ngày chấm điểm T0 (cần cho vintage & chia theo thời gian)
   target: null                             # nếu đã có sẵn cờ bad (1=bad, 0=good, rỗng=loại)
+  status_col: null                         # cột trạng thái khoản vay dạng chữ (vd loan_status): bad/good lấy theo target.status
   dpd_max: null                            # DPD tối đa trong performance window
   first_bad_mob: null                      # MOB lần đầu chạm ngưỡng bad (rỗng nếu chưa bad) - cần cho vintage
   months_observed: null                    # số tháng đã quan sát (MOB hiện tại) - cần cho vintage/độ chín
@@ -29,6 +30,7 @@ columns:
   deceased_flag: null
   staff_vip_flag: null
   policy_flag: null
+  date_formats: {}                         # {tên cột: định dạng ngày}, vd {issue_d: "%b-%Y"} (hồ sơ dữ liệu tự điền)
 
 # ---------------------------------------------------------------------
 # 2. Định nghĩa target  [p.20, p.29]  -- quyết định quan trọng nhất
@@ -54,6 +56,14 @@ target:
     staff_vip: true
     policy_accounts: true                  # tài khoản đặc biệt theo chính sách
   exclude_indeterminate_from_development: true   # [p.20]
+  status:                                  # dùng khi ánh xạ cột trạng thái (columns.status_col), vd Lending Club
+    bad: []                                # giá trị trạng thái tính là bad, vd ["Charged Off"]  [CẦN CHỐT]
+    good: []                               # giá trị tính là good, vd ["Fully Paid"]  [CẦN CHỐT]
+    min_open_year: null                    # loại khoản vay mở trước năm này (vd 2010)
+    maturity:                              # chỉ giữ khoản đã đáo hạn: ngày mở + kỳ hạn ≤ ngày cuối của dữ liệu
+      enabled: false
+      term_col: null                       # cột kỳ hạn (chữ hoặc số tháng, vd "36 months")
+      asof_col: null                       # cột ngày dùng để lấy 'ngày cuối của dữ liệu' (lấy max từ chính dữ liệu)
 
 # ---------------------------------------------------------------------
 # 3. Vintage analysis  [p.20: performance window xác định bằng vintage]
@@ -82,7 +92,8 @@ split:
   test_pct: 0.25                           # [p.34] test 20-30%
   oot:
     enabled: false                         # tuỳ chọn, mặc định tắt (bạn chỉ dùng train/test)
-    months: 3
+    months: 3                              # OOT = N tháng cuối (dùng khi pct = null)
+    pct: null                              # hoặc OOT = phần trăm cuối theo thời gian (vd 0.15)
   min_goods: 2000                          # [p.34]
   min_bads: 2000                           # [p.34]  (VN: bad rate 10-20% đôi khi chấp nhận)
   max_train_test_gap_gini_pp: 5               # [ĐỀ XUẤT][CẦN CHỐT] chênh lệch lớn = overfit [p.34]
@@ -106,11 +117,16 @@ segmentation:
   max_segments: 4                          # [ĐỀ XUẤT]
   tree_max_depth: 2                        # [ĐỀ XUẤT] cây nông để gợi ý
   suggest_if_gini_gain_pp: 3               # [ĐỀ XUẤT] chỉ gợi ý nếu Gini tổng tăng >= 3 điểm
+  max_rows: 60000                          # file lớn: ước lượng Gini tăng trên mẫu tối đa N dòng mỗi tập
+  max_candidates: 12                       # chỉ ước Gini cho N biến ứng viên có chênh lệch bad rate lớn nhất
+  max_base_features: 60                    # số biến tối đa dùng cho mô hình logistic đơn giản khi ước lượng
 
 # ---------------------------------------------------------------------
 # 6. Làm sạch dữ liệu  [p.32]
 # ---------------------------------------------------------------------
 cleaning:
+  max_unique_categorical: 50               # [ĐỀ XUẤT] biến chữ có nhiều giá trị hơn mức này → gợi ý loại (vd emp_title, zip_code)
+  identifier_unique_ratio: 0.95            # [ĐỀ XUẤT] tỷ lệ giá trị duy nhất ≥ mức này → coi là định danh, gợi ý loại
   max_missing_pct: 0.30                    # [p.41] loại biến missing > 30% (không mang tính cấu trúc)
   drop_constant: true                      # [p.41]
   drop_unavailable_at_t0: true             # [p.41] biến không có tại thời điểm chấm điểm
@@ -276,6 +292,19 @@ cutoff:
   profit_per_good: null                    # [CẦN CHỐT] chỉ dùng khi strategy=profit
   loss_per_bad: null                       # [CẦN CHỐT] chỉ dùng khi strategy=profit
   risk_tranches: 10                        # [p.50] A (rủi ro cao) ... J (thấp)
+
+# ---------------------------------------------------------------------
+# 12b. Nạp dữ liệu lớn & dashboard
+# ---------------------------------------------------------------------
+ingest:
+  chunk_rows: 200000                       # đọc file CSV lớn theo khối
+  default_sample_rows: 300000              # cỡ mẫu tối đa mặc định khi nạp file lớn (0 = lấy hết)
+  group_min_overlap: 0.9                   # hai file được coi là cùng cấu trúc nếu ≥ 90% cột trùng (Jaccard)
+dashboard:
+  n_bins: 10                               # số nhóm khi chia biến số theo phân vị
+  max_categories: 15                       # số nhóm chữ tối đa trên biểu đồ (nhóm còn lại gộp 'Khác')
+  time_freq: M                             # M = tháng, Q = quý, Y = năm
+  min_group_count: 30                      # nhóm ít hơn mức này bị đánh dấu 'quá nhỏ'
 
 # ---------------------------------------------------------------------
 # 13. Chế độ public (Streamlit Cloud free tier ~1GB RAM)

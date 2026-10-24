@@ -28,13 +28,14 @@ ENUMS = {
     "cutoff.strategy": ["target_bad_rate", "target_approval_rate", "profit"],
     "evaluation.ml_metrics.decision_threshold.mode": ["by_cutoff", "max_f1", "fixed"],
     "vintage.cohort_granularity": ["month"],
+    "dashboard.time_freq": ["M", "Q", "Y"],
     "scorecard.higher_score_means": ["lower_risk"],
     "cutoff.zones": None,
 }
 TITLES = {
     "columns": "1. Ánh xạ cột", "target": "2. Định nghĩa target", "vintage": "3. Vintage", "split": "4. Chia mẫu (Train/Test) & mất cân bằng",
     "segmentation": "5. Phân tầng", "cleaning": "6. Làm sạch", "binning": "7. Binning", "selection": "8. Chọn biến",
-    "modeling": "9. Mô hình & stepwise", "evaluation": "10. Đánh giá", "scorecard": "11. Bảng điểm", "cutoff": "12. Cutoff", "public_mode": "13. Chế độ public",
+    "modeling": "9. Mô hình & stepwise", "evaluation": "10. Đánh giá", "scorecard": "11. Bảng điểm", "cutoff": "12. Cutoff", "ingest": "12b. Nạp dữ liệu lớn", "dashboard": "12c. Dashboard", "public_mode": "13. Chế độ public",
 }
 SKIP = {"version"}
 

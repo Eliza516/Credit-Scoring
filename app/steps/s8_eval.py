@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from sklearn.metrics import precision_recall_curve, roc_curve
 
-from app import common
+from app import common, dash
 from core import binning, evaluation, modeling
 
 
@@ -79,6 +79,28 @@ def render():
     fk.update_layout(title=f"KS (test) = {E['metrics']['test']['ks']:.3f}", xaxis_title="thứ hạng điểm rủi ro", height=360)
     c2.plotly_chart(fk, use_container_width=True)
 
+    with st.expander("📊 Dashboard đánh giá: tổng hợp chỉ số & phân phối điểm rủi ro", expanded=True):
+        a, b = st.columns(2)
+        with a:
+            mt = E["metrics"]
+            names = list(mt)
+            fig = go.Figure()
+            for k in ("gini", "ks", "auc", "pr_auc"):
+                fig.add_bar(name=k, x=names, y=[mt[n][k] for n in names])
+            fig.update_layout(barmode="group", title="Gini / KS / AUC / PR-AUC theo tập", height=320, legend=dict(orientation="h", y=1.15), margin=dict(t=70))
+            st.plotly_chart(fig, use_container_width=True)
+        with b:
+            h = go.Figure()
+            risk_te = pd.Series(E["risk"]["test"])
+            yte = pd.Series(E["ytest"])
+            lo, hi = risk_te.quantile([0.005, 0.995])
+            for cls, col in ((0, dash.COLORS["good"]), (1, dash.COLORS["bad"])):
+                h.add_histogram(x=risk_te[yte == cls].clip(lo, hi), name="good" if cls == 0 else "bad", histnorm="probability", opacity=0.6, marker_color=col, nbinsx=40)
+            h.update_layout(barmode="overlay", title="Phân phối điểm rủi ro (logit) trên Test", height=320, legend=dict(orientation="h", y=1.15), margin=dict(t=70))
+            st.plotly_chart(h, use_container_width=True)
+        if len(E["compare"]) > 1:
+            cmp_ = E["compare"].reset_index(names="model")
+            st.plotly_chart(dash.bar_chart(cmp_["model"], cmp_["gini"], "So sánh Gini trên Test: logistic vs mô hình đối chứng", fmt=".2f", height=300), use_container_width=True)
     lt = evaluation.lift_table(E["ytest"], E["risk"]["test"])
     st.markdown("**Lift theo decile (test, decile 1 = rủi ro cao nhất)**")
     st.dataframe(lt.style.format({"bad_rate": "{:.1%}", "lift": "{:.2f}", "cum_bad_capture": "{:.1%}"}), use_container_width=True)
@@ -103,5 +125,6 @@ def render():
     g, r = ev["psi"]["green_below"], ev["psi"]["red_above"]
     st.write(f"PSI điểm = **{E['psi']:.3f}** → {evaluation.stability_flag(E['psi'], g, r)}")
     csi = E["csi"].copy()
+    st.plotly_chart(dash.bar_chart(csi.head(20)["variable"].iloc[::-1], csi.head(20)["csi"].iloc[::-1], "CSI theo biến (train → test)", horizontal=True, height=max(300, 22 * min(len(csi), 20) + 100)), use_container_width=True)
     csi["cờ"] = csi["csi"].map(lambda v: evaluation.stability_flag(v, ev["csi"]["green_below"], ev["csi"]["red_above"]))
     st.dataframe(csi.style.format({"csi": "{:.3f}"}), use_container_width=True)

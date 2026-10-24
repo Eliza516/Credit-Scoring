@@ -48,11 +48,26 @@ def suggest(df: pd.DataFrame, y: pd.Series, features: list[str], cfg: dict, trai
     một mô hình logistic đơn giản (đánh giá trên Test).
     """
     sg = cfg["segmentation"]
+    rng = np.random.default_rng(cfg.get("seed", 42))
+    cap = sg.get("max_rows", 60000)
+    if len(train_idx) > cap:                                  # file lớn: ước lượng trên mẫu để nhanh
+        train_idx = pd.Index(rng.choice(np.asarray(train_idx), cap, replace=False))
+    if len(test_idx) > cap:
+        test_idx = pd.Index(rng.choice(np.asarray(test_idx), cap, replace=False))
     cands = sg["candidate_features"] or [c for c in features if df[c].nunique() <= 12]
-    base_feats = [c for c in features]
+    base_feats = [c for c in features if df[c].nunique() > 1][: sg.get("max_base_features", 60)]
     Xall = _design(df.loc[:, base_feats], base_feats)
     g0, p0 = _fit_gini(Xall.loc[train_idx], y.loc[train_idx], Xall.loc[test_idx], y.loc[test_idx])
     rows = []
+    # xếp hạng nhanh theo chênh lệch bad rate giữa nhóm; chỉ ước Gini tăng cho top max_candidates (phần còn lại chỉ báo bad rate)
+    quick = {}
+    for c in cands:
+        if c in df.columns:
+            gg = _groups(df.loc[train_idx, c])
+            br = y.loc[train_idx].groupby(gg.to_numpy()).agg(["mean", "size"])
+            br = br[br["size"] >= 30]["mean"]
+            quick[c] = float(br.max() / br.min()) if len(br) >= 2 and br.min() > 0 else 0.0
+    top = set(sorted(quick, key=quick.get, reverse=True)[: sg.get("max_candidates", 12)])
     for c in cands:
         if c not in df.columns:
             continue
@@ -67,7 +82,7 @@ def suggest(df: pd.DataFrame, y: pd.Series, features: list[str], cfg: dict, trai
         ok = sd[(sd["size_pct"] >= sg["min_segment_size_pct"]) & (sd["bads"] >= sg["min_bads_per_segment"])]
         ratio = (ok["bad_rate"].max() / ok["bad_rate"].min()) if len(ok) >= 2 and ok["bad_rate"].min() > 0 else np.nan
         gain = np.nan
-        if len(ok) >= 2 and len(ok) <= sg["max_segments"]:
+        if len(ok) >= 2 and len(ok) <= sg["max_segments"] and c in top:
             preds = pd.Series(np.nan, index=test_idx)
             used = set(ok["group"])
             feats_c = [f for f in base_feats if f != c]

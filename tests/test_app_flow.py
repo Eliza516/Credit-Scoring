@@ -12,6 +12,11 @@ RULES = str(ROOT / "app" / "pages" / "2_rules.py")
 DOCS = str(ROOT / "app" / "pages" / "3_docs.py")
 
 
+def load_demo(at):
+    click(at, "Dùng dữ liệu demo")
+    click(at, "Dùng dữ liệu này")
+
+
 def click(at, label_part):
     btns = [b for b in at.button if label_part in b.label]
     assert btns, f"không thấy nút '{label_part}'; có: {[b.label for b in at.button]}"
@@ -30,7 +35,7 @@ def at():
 
 
 def test_full_flow(at):
-    click(at, "dữ liệu demo")
+    load_demo(at)
     click(at, "Chốt dữ liệu")
     assert "mapping" in at.session_state
     click(at, "Phân tích chất lượng")
@@ -96,7 +101,7 @@ def test_docs_page_runs():
 
 
 def _to_target_step(a):
-    click(a, "dữ liệu demo")
+    load_demo(a)
     for role in ("dpd_max", "first_bad_mob", "months_observed", "n_payments"):    # bước 1 chỉ có ID + ngày mở + biến đặc trưng
         a.selectbox(key=f"map_{role}_demo").set_value("—")
     a.run()
@@ -155,7 +160,7 @@ def test_step3_main_wide_dpd_columns():
     from core import performance
     a = AppTest.from_file(PAGE, default_timeout=300)
     a.run()
-    click(a, "dữ liệu demo")
+    load_demo(a)
     raw = a.session_state["raw"]
     assert performance.detect_layout(raw) == "long"                          # demo gốc không có cột DPD ngang
     wide = raw.copy()

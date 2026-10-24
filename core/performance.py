@@ -199,11 +199,13 @@ def loans_from_panel(long: pd.DataFrame, df: pd.DataFrame, id_col: str, open_col
 
 
 def loans_from_main_summary(df: pd.DataFrame, open_col: str, first_bad: str | None, first_bad_kind: str,
-                            observed: str | None, observed_kind: str, asof_date=None) -> pd.DataFrame:
+                            observed: str | None, observed_kind: str, asof_date=None, bad_mask: pd.Series | None = None) -> pd.DataFrame:
     """Nguồn B1: dùng cột tổng hợp có sẵn trong file chính.
 
     first_bad_kind: 'mob' (cột là MOB) | 'date' (cột là ngày bad đầu tiên, rỗng = chưa bad).
     observed_kind: 'mob' (cột số tháng đã quan sát) | 'date' (cột ngày quan sát) | 'asof' (một ngày cắt dữ liệu chung, asof_date).
+    bad_mask: nếu có, chỉ khoản vay ở mask này mới có first_bad_mob (các khoản khác = chưa bad) – dùng khi cột ngày
+    (vd ngày thanh toán cuối) chỉ là thời điểm vỡ nợ đối với khoản đã bad theo cột trạng thái.
     """
     op = pd.to_datetime(df[open_col])
     out = pd.DataFrame({"open_date": op}, index=df.index)
@@ -212,6 +214,8 @@ def loans_from_main_summary(df: pd.DataFrame, open_col: str, first_bad: str | No
     fb = df[first_bad]
     out["first_bad_mob"] = (_months_between(op, pd.to_datetime(fb, errors="coerce")) if first_bad_kind == "date"
                             else pd.to_numeric(fb, errors="coerce")).clip(lower=0)
+    if bad_mask is not None:
+        out.loc[~bad_mask.reindex(df.index).fillna(False).to_numpy(), "first_bad_mob"] = np.nan
     if observed_kind == "asof":
         if asof_date is None:
             raise PerformanceError("Cần chọn ngày cắt dữ liệu.")
@@ -240,8 +244,13 @@ def apply_loans(df: pd.DataFrame, mapping: dict, loans: pd.DataFrame, fields: li
     return d, m
 
 
-def target_source_errors(mapping: dict) -> list[str]:
-    """Lỗi nếu chưa có nguồn để dựng target (cột target hoặc dpd_max)."""
+def target_source_errors(mapping: dict, cfg: dict | None = None) -> list[str]:
+    """Lỗi nếu chưa có nguồn để dựng target (cột target, cột trạng thái, hoặc dpd_max)."""
+    if mapping.get("status_col"):
+        st = (cfg or {}).get("target", {}).get("status", {})
+        if cfg is not None and not (st.get("bad") and st.get("good")):
+            return ["Đã chọn cột trạng thái nhưng chưa khai báo giá trị bad và good (trang Quy tắc → Định nghĩa target → status)."]
+        return []
     if mapping.get("target") or mapping.get("dpd_max"):
         return []
     return ["Chưa có nguồn dựng target: ánh xạ cột target/dpd_max ở bước 1, hoặc nạp dữ liệu performance (DPD theo tháng) ở bước 3."]

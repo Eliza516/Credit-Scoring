@@ -1,8 +1,10 @@
+import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 
-from app import common
-from core import segmentation, split
+from app import common, dash
+from core import dashboard as Dd, segmentation, split
 
 
 def render():
@@ -39,19 +41,31 @@ def render():
                 with st.expander("Cây quyết định nông – các lá gợi ý"):
                     st.dataframe(r["tree"].style.format({"size_pct": "{:.1%}", "bad_rate": "{:.1%}"}), use_container_width=True)
                     st.code(r["tree"].attrs.get("tree_text", ""))
-    feats_seg = ["(không phân tầng – mô hình chung)"] + list(ss.feats)
-    f = st.selectbox("Xây mô hình cho tầng theo biến (quyết định của bạn)", feats_seg, index=0)
+    cand = [c for c in (sg["candidate_features"] or []) if c in ss.feats]
+    others = [c for c in ss.feats if c not in cand and D0[c].nunique() > 1]
+    feats_seg = ["(không phân tầng – mô hình chung)"] + cand + others
+    f = st.selectbox("Phân tầng theo biến nào? (quyết định của bạn) – chọn biến để xem dashboard bad rate theo nhóm", feats_seg, index=0, key="seg_feature",
+                     format_func=lambda c: f"{c} — {ss.get('col_notes', {}).get(c, '')[:60]}" if ss.get("col_notes", {}).get(c) else c)
     seg = None
-    D, y = D0, y0
-    if f != feats_seg[0]:
+    Dseg, y = D0, y0
+    if f == feats_seg[0]:
+        with st.expander("📊 Dashboard: bad rate chung theo thời gian", expanded=True):
+            if date_col and date_col in D0.columns:
+                vol = Dd.volume_by_period(D0, date_col, y0, cfg["dashboard"]["time_freq"])
+                st.plotly_chart(dash.time_chart(vol, "Khoản vay & bad rate theo kỳ (mô hình chung)"), use_container_width=True)
+            st.caption("Chọn một biến ở trên để xem bad rate theo từng nhóm của biến đó và quyết định có tách tầng hay không.")
+    else:
+        with st.expander(f"📊 Dashboard bad rate theo nhóm của {f}", expanded=True):
+            dash.feature_dashboard(D0, y0, ss.feats, cfg, "s4seg", date_col=date_col if date_col in D0.columns else None, notes=ss.get("col_notes", {}),
+                                   thresholds={"min_size_pct": sg["min_segment_size_pct"], "min_bads": sg["min_bads_per_segment"]}, fixed_feature=f)
         grp = segmentation.assign_segments(D0, f)
         vals = sorted(grp.unique())
         pick = st.multiselect("Các giá trị thuộc tầng này", vals, default=vals[:1])
         if pick:
             m = grp.isin(pick)
-            D, y = D0[m], y0[m]
+            Dseg, y = D0[m], y0[m]
             seg = {"feature": f, "values": pick, "name": f"{f}={'|'.join(map(str, pick))}"}
-            st.info(f"Tầng `{seg['name']}`: {len(D):,} dòng, bad rate {y.mean():.1%}. Chạy lại các bước sau cho từng tầng; mỗi tầng xuất một bảng điểm riêng.")
+            st.info(f"Tầng `{seg['name']}`: {len(Dseg):,} dòng, bad rate {y.mean():.1%}. Chạy lại các bước sau cho từng tầng; mỗi tầng xuất một bảng điểm riêng.")
 
     # --------------------------------------------------------------- chia mẫu
     st.markdown("#### Chia Train / Test")
@@ -59,11 +73,11 @@ def render():
                f"tối thiểu {sp['min_goods']:,} good & {sp['min_bads']:,} bad (không dùng K-fold).")
     if st.button("Chia mẫu", type="primary"):
         try:
-            parts = split.split_indices(D, y, cfg, date_col)
+            parts = split.split_indices(Dseg, y, cfg, date_col)
         except ValueError as e:
             st.error(str(e)); return
         common.invalidate_from("binning")
-        ss.parts, ss.D, ss.y, ss.seg = parts, D, y, seg
+        ss.parts, ss.D, ss.y, ss.seg = parts, Dseg, y, seg
         ss.split_tab = split.check_sizes(y, parts, cfg)
     if "parts" in ss:
         tab = ss.split_tab
@@ -71,6 +85,19 @@ def render():
         for w in tab["warning"]:
             if w:
                 st.warning("Cảnh báo cỡ mẫu: " + w + " → cân nhắc đổi định nghĩa/window hoặc nới ngưỡng ở trang quy tắc.")
+        with st.expander("📊 Dashboard chia mẫu: thời gian, bad rate, phân phối theo tập", expanded=True):
+            sm = Dd.split_summary(ss.parts, ss.D, date_col, ss.y)
+            st.dataframe(sm.style.format({"bad_rate": "{:.2%}"}), use_container_width=True, hide_index=True)
+            st.plotly_chart(dash.bar_chart(sm["set"], sm["bad_rate"], "Bad rate theo tập (chênh lệch lớn = dữ liệu dịch chuyển theo thời gian)", fmt=".1%", height=300), use_container_width=True)
+            num = [c for c in ss.feats if pd.api.types.is_numeric_dtype(ss.D[c]) and ss.D[c].nunique() > 8][:60]
+            if num:
+                v = st.selectbox("So sánh phân phối một biến giữa các tập (phát hiện dịch chuyển dữ liệu)", num, key="s4_shift")
+                fig = go.Figure()
+                lo, hi = ss.D[v].quantile([0.01, 0.99])
+                for k, ix in ss.parts.items():
+                    fig.add_histogram(x=ss.D.loc[ix, v].clip(lo, hi), name=k, histnorm="probability", opacity=0.55, nbinsx=30)
+                fig.update_layout(barmode="overlay", title=f"Phân phối {v} theo tập", height=320)
+                st.plotly_chart(fig, use_container_width=True)
         if date_col:
             d = ss.D[[date_col]].copy()
             d["tập"] = "-"

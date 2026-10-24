@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 
-from app import common
+from app import common, dash
 from core import config as cfgmod, imbalance, modeling
 
 LABEL = {"none": "Không can thiệp", "oversample_random": "Oversample ngẫu nhiên (nhân bản bad)", "oversample_smote": "Oversample SMOTE",
@@ -44,6 +44,9 @@ def render():
     if st.button("So sánh các phương án (Gini/KS/PR-AUC trên Test)"):
         with st.spinner("Đang so sánh…"):
             ss.imb_cmp = modeling.compare_imbalance(ss.W_tr, y_tr, ss.W_te, ss.y.loc[te], ss.final_vars, cfg, None, rate)
+    if "imb_cmp" in ss and "gini_test" in ss.imb_cmp.columns:
+        c = ss.imb_cmp.dropna(subset=["gini_test"])
+        st.plotly_chart(dash.bar_chart(c["method"], c["gini_test"], "Gini trên Test theo phương án xử lý mất cân bằng", fmt=".2f", height=300), use_container_width=True)
     if "imb_cmp" in ss:
         st.dataframe(ss.imb_cmp.style.format({"train_bad_rate": "{:.1%}", "gini_test": "{:.3f}", "ks_test": "{:.3f}", "pr_auc_test": "{:.3f}", "recall": "{:.2f}", "precision": "{:.2f}"}), use_container_width=True)
     if not ready:
@@ -91,6 +94,20 @@ def render():
     m = ss.model
     st.markdown("**Hệ số mô hình** (logit(P(bad)) = b0 + Σ b·WoE)")
     st.dataframe(m["table"].style.format({"coef": "{:.4f}", "std_err": "{:.4f}", "z": "{:.2f}", "p_value": "{:.2e}"}), use_container_width=True)
+    with st.expander("📊 Dashboard mô hình: hệ số & đóng góp", expanded=True):
+        t = m["table"].sort_values("coef").iloc[::-1]
+        a, b = st.columns(2)
+        with a:
+            st.plotly_chart(dash.bar_chart(t.index, t["coef"], "Hệ số logistic trên WoE (âm = tăng WoE làm giảm xác suất bad)", horizontal=True,
+                                           height=max(300, 22 * len(t) + 100), color=["#2a9d8f" if ok else "#d1495b" for ok in t["sign_ok"]]), use_container_width=True)
+        with b:
+            if "steps" in ss and len(ss.steps):
+                stp = ss.steps.copy()
+                stp["delta"] = stp["action"].map({"add": 1, "remove": -1})
+                stp["số biến"] = stp["delta"].cumsum()
+                st.plotly_chart(dash.bar_chart(stp["step"].astype(str) + " " + stp["action"] + " " + stp["variable"], stp["số biến"], "Đường đi stepwise (số biến sau mỗi bước)", height=300), use_container_width=True)
+            else:
+                st.caption("Chạy stepwise để xem đường đi thêm/bớt biến.")
     st.caption(f"Intercept {m['intercept']:.4f} · prior offset {m['prior_offset']:.4f} · huấn luyện trên {ss.resampled['rows']:,} dòng, bad rate {ss.resampled['bad_rate']:.1%}.")
     if not m["table"]["sign_ok"].all():
         st.error("Có hệ số sai dấu: " + ", ".join(m["table"].index[~m["table"]["sign_ok"]]) + " → loại hoặc xem lại binning (đa cộng tuyến/ngược xu hướng).")

@@ -1,5 +1,5 @@
 [server]
-maxUploadSize = 20
+maxUploadSize = 1024
 headless = true
 
 [browser]

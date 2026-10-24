@@ -15,12 +15,15 @@ Có chế độ dùng thử công khai (`APP_MODE=public`) để deploy lên Str
 app/
   main.py             # st.navigation: 3 trang
   common.py           # session, chế độ public, invalidate các bước sau
+  dash.py             # thành phần dashboard dùng chung (biểu đồ bad rate theo biến, thời gian, …)
   pages/              # 1_analysis (9 bước, mỗi bước 1 tab) · 2_rules (dashboard ngưỡng) · 3_docs
   steps/              # s1_data … s9_score: UI mỏng của từng bước
 core/                 # Logic thuần Python, KHÔNG phụ thuộc Streamlit
-  config.py ingest.py cleaning.py target.py performance.py vintage.py split.py imbalance.py segmentation.py
+  config.py ingest.py profiles.py derive.py cleaning.py target.py performance.py vintage.py split.py imbalance.py segmentation.py
+  dashboard.py
   binning.py selection.py modeling.py evaluation.py scorecard.py export.py store.py demo.py
 config/
+  profiles/               # hồ sơ dữ liệu (generic, lending_club): ánh xạ, định dạng ngày, nhãn từ trạng thái, cột rò rỉ
   business.example.yaml   # Mẫu quy tắc nghiệp vụ (commit) – mỗi giá trị ghi nguồn slide [p.N]/[ĐỀ XUẤT]/[CẦN CHỐT]
   business.yaml           # Cấu hình thật (KHÔNG commit)
 docs/business_rules.md    # Quy tắc để duyệt (tiếng Việt)
@@ -49,5 +52,6 @@ tests/  scripts/  data/(không commit)  artifacts/(không commit)
 - [x] 7. Huấn luyện: mất cân bằng (người dùng chọn), stepwise, logistic, DT/RF/LightGBM đối chứng
 - [x] 8. Đánh giá (AUC/Gini/KS + PR-AUC/precision/recall/F1/MCC/lift, PSI/CSI)
 - [x] 9. Bảng điểm, tranche, cutoff, xuất Excel/PDF/mô hình, chấm điểm file mới
+- [x] Nhiều file một lúc, file lớn (đọc theo khối + lấy mẫu), hồ sơ dữ liệu Lending Club, dashboard ở mọi bước
 - [ ] Deploy Streamlit Community Cloud (xem `docs/deploy.md`)
 - [ ] Người dùng chốt các mục "CẦN CHỐT" trong `docs/business_rules.md`
