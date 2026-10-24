@@ -66,6 +66,9 @@ vintage:
     # nhỏ hơn ngưỡng trong N MOB liên tiếp -> gợi ý performance window
     delta_threshold_pp: 0.2                # [ĐỀ XUẤT][CẦN CHỐT] điểm phần trăm
     consecutive_mob: 3                     # [ĐỀ XUẤT][CẦN CHỐT]
+  dpd_thresholds: [30, 60, 91]             # [ĐỀ XUẤT] ngưỡng DPD có thể chọn trên UI để vẽ vintage (mặc định = target.bad.dpd_threshold)
+  measure: count                           # count = theo số khoản | balance = theo dư nợ (cần cột dư nợ trong performance)
+  min_loans_per_cell: 30                   # [ĐỀ XUẤT][CẦN CHỐT] ô cohort×MOB có ít khoản hơn thì che (đuôi nhiễu)
   cohort_anomaly:
     zscore_threshold: 2.0                  # [ĐỀ XUẤT] cờ cohort bad rate lệch bất thường
     min_cohort_size: 200                   # [ĐỀ XUẤT][CẦN CHỐT]
@@ -281,4 +284,5 @@ public_mode:
   max_upload_mb: 20                        # [ĐỀ XUẤT]
   max_rows: 100000                         # [ĐỀ XUẤT]
   max_columns: 200                         # [ĐỀ XUẤT]
+  max_rows_performance: 1000000            # [ĐỀ XUẤT] file performance (nhiều dòng hơn file chính)
   show_privacy_banner: true

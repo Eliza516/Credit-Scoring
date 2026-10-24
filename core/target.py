@@ -13,6 +13,26 @@ def _flag(df: pd.DataFrame, col: str | None) -> pd.Series:
     return df[col].fillna(0).astype(float).astype(bool)
 
 
+def _flag_exclusions(df: pd.DataFrame, mapping: dict, cfg: dict) -> tuple[pd.Series, pd.Series]:
+    """(mask, lý do) cho các loại trừ theo CỜ: fraud, đã mất, nhân viên/VIP, tài khoản chính sách (không gồm chưa đủ chín)."""
+    ex = cfg["target"]["exclusion"]
+    mask = pd.Series(False, index=df.index)
+    reason = pd.Series("", index=df.index, dtype=object)
+    for key, col, why in (("fraud", "fraud_flag", "fraud"), ("deceased", "deceased_flag", "đã mất"),
+                          ("staff_vip", "staff_vip_flag", "nhân viên/VIP"), ("policy_accounts", "policy_flag", "tài khoản chính sách")):
+        if ex.get(key):
+            f = _flag(df, mapping.get(col))
+            reason[f & ~mask] = why
+            mask = mask | f
+    return mask, reason
+
+
+def exclusion_flags(df: pd.DataFrame, mapping: dict, cfg: dict) -> pd.Series:
+    """True ở khoản vay bị loại theo cờ (fraud/đã mất/nhân viên-VIP/chính sách). KHÔNG gồm 'chưa đủ chín' –
+    dùng cho vintage để không mất các cohort trẻ."""
+    return _flag_exclusions(df, mapping, cfg)[0]
+
+
 def build_target(df: pd.DataFrame, mapping: dict, cfg: dict) -> pd.DataFrame:
     """Trả DataFrame (cùng index) gồm: status (bad/good/indeterminate/excluded), reason, y (1 bad, 0 good, NaN còn lại)."""
     t = cfg["target"]
@@ -49,21 +69,15 @@ def build_target(df: pd.DataFrame, mapping: dict, cfg: dict) -> pd.DataFrame:
     status[(dpd > t["good"]["max_dpd"]) & ~is_bad & ~late] = INDET
     reason[(status == INDET) & (reason == "")] = f"DPD {t['indeterminate']['dpd_range'][0]}-{t['indeterminate']['dpd_range'][1]} (chưa 91+)"
 
+    excl, flag_reason = _flag_exclusions(df, mapping, cfg)
+    reason[excl] = flag_reason[excl]
     ex = t["exclusion"]
-    excl = pd.Series(False, index=df.index)
+
     def mark(mask, why):
         nonlocal excl
         m = mask & ~excl
         reason[m] = why
-        excl |= mask
-    if ex.get("fraud"):
-        mark(_flag(df, mapping.get("fraud_flag")), "fraud")
-    if ex.get("deceased"):
-        mark(_flag(df, mapping.get("deceased_flag")), "đã mất")
-    if ex.get("staff_vip"):
-        mark(_flag(df, mapping.get("staff_vip_flag")), "nhân viên/VIP")
-    if ex.get("policy_accounts"):
-        mark(_flag(df, mapping.get("policy_flag")), "tài khoản chính sách")
+        excl = excl | mask
     if mapping.get("n_payments") and ex.get("min_payments"):
         mark((df[mapping["n_payments"]].fillna(0) < ex["min_payments"]) & (status != BAD), f"< {ex['min_payments']} kỳ thanh toán")
     if mapping.get("months_observed"):

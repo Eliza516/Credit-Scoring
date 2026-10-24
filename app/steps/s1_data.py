@@ -66,17 +66,20 @@ def render():
         with grid[i % 3]:
             sel = st.selectbox(lab, cols, index=cols.index(cur) if cur in cols else 0, key=f"map_{k}_{ss.get('loaded_key')}")
         mapping[k] = None if sel == "—" else sel
+    from core import performance
+    perf_cols = st.multiselect("Cột performance theo tháng nằm ngay trong file chính (vd DPD_M1…DPD_M24) – dùng cho vintage, KHÔNG làm biến mô hình",
+                               list(raw.columns), default=performance.guess_wide_cols(raw), key=f"perf_cols_{ss.get('loaded_key')}")
     errs = ingest.validate_mapping(raw, mapping)
     for e in errs:
         st.error(e)
-    if mapping.get("first_bad_mob") is None or mapping.get("open_date") is None or mapping.get("months_observed") is None:
-        st.caption("Thiếu open_date / first_bad_mob / months_observed → không dựng được Vintage (các bước khác vẫn chạy).")
+    st.caption("dpd_max, first_bad_mob, months_observed, n_payments là tuỳ chọn ở bước này: có thể để trống rồi nạp file performance ở bước 3 để tự tính.")
     if st.button("✅ Chốt dữ liệu & ánh xạ", type="primary", disabled=bool(errs)):
         common.invalidate_from("clean")
         df2 = ingest.apply_mapping(raw, mapping)
         ss.raw = df2
         ss.mapping = mapping
-        extra = [mapping["first_bad_mob"]] if mapping.get("first_bad_mob") else []
+        extra = ([mapping["first_bad_mob"]] if mapping.get("first_bad_mob") else []) + list(perf_cols)
+        ss.perf_cols = list(perf_cols)
         ss.feats_all = ingest.feature_columns(df2, mapping, extra)
         common.store().save("ingest", {"mapping": mapping, "shape": df2.shape, "features": ss.feats_all}, cfg)
         st.success(f"Chốt xong: {len(ss.feats_all)} biến ứng viên. Sang bước 2.")

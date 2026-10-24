@@ -88,3 +88,33 @@ def make_demo(n: int = 40000, seed: int = 42, obs_end: str = "2025-12-31", targe
     df["all_const"] = 1
     df["mostly_missing"] = np.where(rng.random(n) < 0.75, np.nan, rng.normal(size=n))
     return df
+
+
+def make_demo_performance(df: pd.DataFrame, max_mob: int = 24, seed: int = 7) -> pd.DataFrame:
+    """Panel performance dọc (loan_id, snapshot_month, dpd, balance) nhất quán với df demo:
+    khoản bad chạm DPD ≥ 91 đúng tại first_bad_mob; khoản 'quá hạn nhẹ' có 1 tháng DPD 15–80; còn lại DPD 0."""
+    rng = np.random.default_rng(seed)
+    obs = np.minimum(df["months_observed"].to_numpy().astype(int), max_mob)
+    obs = np.maximum(obs, 0)
+    idx = np.repeat(np.arange(len(df)), obs)
+    start = np.cumsum(obs) - obs
+    m = np.arange(obs.sum()) - np.repeat(start, obs) + 1            # MOB 1..obs của từng khoản
+    fb = df["first_bad_mob"].to_numpy(dtype=float)[idx]
+    mx = df["max_dpd"].to_numpy(dtype=float)[idx]
+    dpd = np.zeros(len(m))
+    bad = ~np.isnan(fb) & (m >= fb)
+    dpd[bad] = np.minimum(mx[bad], 91 + 30 * (m[bad] - fb[bad]))
+    ramp = ~np.isnan(fb) & (m < fb)
+    dpd[ramp & (m == fb - 1)] = 60
+    dpd[ramp & (m == fb - 2)] = 30
+    mid = np.isnan(df["first_bad_mob"].to_numpy(dtype=float)) & (df["max_dpd"].to_numpy() > 0)
+    pick = (rng.random(len(df)) * np.maximum(obs, 1)).astype(int) + 1   # tháng có DPD nhẹ
+    hit = mid[idx] & (m == pick[idx])
+    dpd[hit] = mx[hit]
+    term = df["term_months"].to_numpy(dtype=float)[idx]
+    amt = df["loan_amount_mil"].to_numpy(dtype=float)[idx] * 1e6
+    bal = np.maximum(amt * (1 - m / np.maximum(term, 1)), 0.05 * amt).round(0)
+    opens = pd.to_datetime(df["open_date"]).to_numpy()[idx].astype("datetime64[M]")
+    snap = (opens + m).astype("datetime64[M]")
+    return pd.DataFrame({"loan_id": df["loan_id"].to_numpy()[idx], "snapshot_month": pd.to_datetime(snap) + pd.offsets.MonthEnd(0),
+                         "dpd": dpd.astype(int), "balance": bal})
