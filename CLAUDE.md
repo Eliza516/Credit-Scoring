@@ -18,7 +18,7 @@ app/
   pages/              # 1_analysis (9 bước, mỗi bước 1 tab) · 2_rules (dashboard ngưỡng) · 3_docs
   steps/              # s1_data … s9_score: UI mỏng của từng bước
 core/                 # Logic thuần Python, KHÔNG phụ thuộc Streamlit
-  config.py ingest.py cleaning.py target.py vintage.py split.py imbalance.py segmentation.py
+  config.py ingest.py cleaning.py target.py performance.py vintage.py split.py imbalance.py segmentation.py
   binning.py selection.py modeling.py evaluation.py scorecard.py export.py store.py demo.py
 config/
   business.example.yaml   # Mẫu quy tắc nghiệp vụ (commit) – mỗi giá trị ghi nguồn slide [p.N]/[ĐỀ XUẤT]/[CẦN CHỐT]
@@ -42,7 +42,7 @@ tests/  scripts/  data/(không commit)  artifacts/(không commit)
 - [x] 0. Khung dự án, `.gitignore`, `requirements.txt`, config mẫu, app 3 trang
 - [x] 1. Upload & ánh xạ cột
 - [x] 2. Làm sạch (gợi ý theo ngưỡng)
-- [x] 3. Target & Vintage (chọn performance window)
+- [x] 3. Target & Vintage (chọn performance window; nguồn tuỳ chọn: không dùng / cột có sẵn / upload performance dọc-ngang; ngưỡng DPD chọn được)
 - [x] 4. Chia Train/Test & phân tầng gợi ý
 - [x] 5. Binning editor (WoE/IV, gộp/tách bin thủ công)
 - [x] 6. Chọn biến (phễu + tuân thủ)

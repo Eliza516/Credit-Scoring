@@ -66,18 +66,16 @@ def profile(df: pd.DataFrame) -> pd.DataFrame:
         "dtype": df.dtypes.astype(str),
         "missing_pct": df.isna().mean().round(4),
         "n_unique": df.nunique(dropna=True),
-        "example": [df[c].dropna().iloc[0] if df[c].notna().any() else None for c in df.columns],
+        "example": [str(df[c].dropna().iloc[0]) if df[c].notna().any() else "" for c in df.columns],
     })
 
 
 def validate_mapping(df: pd.DataFrame, mapping: dict) -> list[str]:
-    """Danh sách lỗi (rỗng = ok)."""
+    """Danh sách lỗi (rỗng = ok). Nguồn dựng target (target/dpd_max hoặc performance) được kiểm ở bước 3."""
     errs = []
     for k, col in mapping.items():
         if col and col not in df.columns:
             errs.append(f"Cột '{col}' (gán cho '{k}') không có trong dữ liệu.")
-    if not mapping.get("target") and not mapping.get("dpd_max"):
-        errs.append("Cần cột target có sẵn hoặc cột dpd_max để dựng target.")
     used = [c for c in mapping.values() if c]
     if len(used) != len(set(used)):
         errs.append("Một cột đang được gán cho nhiều vai trò.")

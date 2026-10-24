@@ -21,6 +21,11 @@ Lưu ý slide: đổi định nghĩa bad = đổi toàn bộ mô hình; bad rate
 ## 2. Vintage analysis (p.20) – *thêm theo yêu cầu của bạn*
 - Dùng để (a) chọn performance window: MOB mà bad rate tích lũy cohort "chín"; (b) kiểm tra ổn định chất lượng cohort theo tháng mở.
 - Ngưỡng "chín" (tăng < 0,2 điểm % trong 3 MOB liên tiếp), z-score cohort bất thường 2,0, cỡ cohort tối thiểu 200: 🟡 ❓.
+- **Nguồn dữ liệu vintage (tuỳ chọn, chọn ở bước 3):** (A) không dùng vintage; (B) chọn trường có sẵn trong file chính – hoặc cột tổng hợp (MOB/ngày bad đầu tiên + số tháng/ngày quan sát/ngày cắt dữ liệu), hoặc nhiều cột DPD theo tháng dạng ngang (DPD_M1…); (C) upload file performance, dạng dọc (khoản vay × tháng: ID, tháng quan sát hoặc MOB, DPD, dư nợ tuỳ chọn) hoặc dạng ngang, tự nhận diện. B và C ra cùng một bảng cohort × MOB.
+- **Định nghĩa:** ô (cohort tháng mở, MOB m) = % khoản vay *đã quan sát tới MOB m* mà từng chạm DPD ≥ ngưỡng ở MOB ≤ m (ever-bad tích lũy). Ngưỡng DPD chọn trên UI (mặc định 30/60/91 và ngưỡng bad của target); có thể tính theo dư nợ (dư nợ ở MOB nhỏ nhất của khoản vay) nếu file có cột dư nợ. Ô có ít hơn `vintage.min_loans_per_cell` (30) khoản bị che.
+- **Gợi ý performance window:** độ tăng giữa MOB m−1 và m được tính *cùng tập cohort* (like-for-like) rồi cộng dồn, nên không bị lệch khi các cohort trẻ chưa quan sát đủ; window = MOB mà độ tăng < ngưỡng trong N MOB liên tiếp. Khoản vay chưa đủ chín **vẫn nằm trong vintage** (chỉ bị loại ở bước dựng target); chỉ khoản fraud/đã mất/nhân viên-VIP/tài khoản chính sách bị loại.
+- **Tự điền cho target:** từ performance tính dpd_max, MOB bad đầu tiên (theo ngưỡng bad của target), số tháng quan sát, số kỳ thanh toán; khoản vay không có dòng performance bị loại “chưa đủ quan sát”. Các cột dùng để suy ra này bị loại khỏi biến ứng viên (tránh rò rỉ).
+- **Lưu ý:** khoản vay đã tất toán/đóng sổ và biến mất khỏi file performance bị coi là hết quan sát (survivorship); nếu muốn giữ chúng, hãy bổ sung các tháng còn lại với DPD = 0 trong file.
 
 ## 3. Chia mẫu (p.34–37)
 - Chỉ chia **Train / Test** (75/25, mặc định theo thời gian nếu có cột ngày; sửa được) ✅ p.34. **Không dùng K-fold CV hay bootstrap**. OOT là tuỳ chọn, mặc định tắt.

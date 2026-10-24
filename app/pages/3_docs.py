@@ -14,7 +14,7 @@ with t1:
 ### Quy trình 9 bước (trang *Phân tích & xây mô hình*)
 1. **Dữ liệu** – upload CSV/Excel hoặc dùng *dữ liệu demo tổng hợp*; ánh xạ cột (ID, ngày mở, DPD, MOB…).
 2. **Làm sạch** – xem tỷ lệ missing/outlier/giá trị đặc biệt; hệ thống *gợi ý* loại biến theo ngưỡng, bạn tick/bỏ.
-3. **Target & Vintage** – đường vintage giúp chọn performance window; dựng bad/good/indeterminate/exclusion.
+3. **Target & Vintage** – vintage là tuỳ chọn: không dùng, chọn trường có sẵn trong file chính, hoặc upload file performance (dọc/ngang); biểu đồ + ma trận cohort × MOB giúp chọn performance window; dựng bad/good/indeterminate/exclusion (có thể tự điền cột từ performance).
 4. **Chia mẫu & Phân tầng** – chia Train/Test (không K-fold); gợi ý tầng từ dữ liệu, bạn quyết định có tách hay không.
 5. **Binning** – binning tự động rồi gộp/tách bin thủ công, xem WoE/IV, bad rate train vs test.
 6. **Chọn biến** – phễu IV → tương quan → ổn định → VIF → tuân thủ; bạn duyệt danh sách cuối.
